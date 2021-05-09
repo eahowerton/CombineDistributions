@@ -23,7 +23,7 @@ mean_trim(dat, n_trim, trim_type, avg_dir, ret_quantiles)
 \value{
 data.frame containing \code{quantile} and \code{value} of aggregate distribution,
 plus columns specifying \code{direction}, \code{method}, \code{trim_type}, and \code{n_trim}.
-TO DO: MAKE THIS CONSISTENT
+TO DO: MAKE THIS NAMING CONSISTENT
 }
 \description{
 Trim entire distribution based on mean value ADD REF.
