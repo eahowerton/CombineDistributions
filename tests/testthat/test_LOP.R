@@ -1,7 +1,10 @@
-# library("testthat")
 #source("src/aggregation_methods/LOP.R")
-library(dplyr)
-library(tibble)
+suppressMessages({
+  library(testthat)
+  library(dplyr)
+  library(tibble)
+})
+
 
 #### calculate_aggregate_LOP ####
 test_that("Test calculate_aggregate_LOP: single CDF uniform",{
@@ -148,7 +151,7 @@ test_that("Test create_interp_fns(): special case, all quantiles equal",{
   d$value <- ifelse(d$id == "A", 2*d$quantile, 5)
   # check for warning
   expect_warning(create_interp_fns(d))
-  test <- create_interp_fns(d)
+  suppressWarnings(test <- create_interp_fns(d))
   # check characteristics of output
   expect_length(test, 1)
   expect_true(is.function(test$A))
@@ -164,7 +167,7 @@ test_that("Test create_interp_fns(): special case, non-monotonic cdf",{
   d$value[d$id == "B" & d$quantile == 0.5] = 5
   # check for warning
   expect_warning(create_interp_fns(d))
-  test <- create_interp_fns(d)
+  suppressWarnings(test <- create_interp_fns(d))
   # check characteristics of output
   expect_length(test, 1)
   expect_true(is.function(test$A))
@@ -180,7 +183,7 @@ test_that("Test create_interp_fns(): special case, NA quantile",{
   d$value[d$id == "B" & d$quantile == 0.25] = NA
   # check for warning
   expect_warning(create_interp_fns(d))
-  test <- create_interp_fns(d)
+  suppressWarnings(test <- create_interp_fns(d))
   # check characteristics of output
   expect_length(test, 1)
   expect_true(is.function(test$A))
