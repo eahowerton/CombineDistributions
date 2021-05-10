@@ -1,9 +1,24 @@
 library("testthat")
 
+#### check keep_vals() ####
+test_that("Test keep_vals()",{
+  # exterior
+  expect_setequal(keep_vals("exterior", 2, 6)[["keep"]], 2:5)
+  expect_setequal(suppressWarnings(keep_vals("exterior", 3, 6)[["keep"]]), 3:4)
+  expect_warning(keep_vals("exterior", 3, 6))
+  # interior
+  expect_setequal(keep_vals("interior", 2, 6)[["keep"]], c(1:2, 5:6))
+  expect_setequal(suppressWarnings(keep_vals("interior", 3, 6)[["keep"]]), c(1,6))
+  expect_warning(keep_vals("interior", 3, 6))
+  # fail
+  expect_error(suppressWarnings(keep_vals("interior", 5, 6)))
+  expect_error(keep_vals("interior", 0, 6))
+})
+
 #### check_update_ntrim_even() ####
 test_that("Test check_update_ntrim_even()",{
   expect_equal(check_update_ntrim_even(2), 2)
-  expect_equal(check_update_ntrim_even(3), 4)
+  expect_equal(suppressWarnings(check_update_ntrim_even(3)), 4)
   expect_warning(check_update_ntrim_even(3))
 })
 
@@ -13,9 +28,9 @@ test_that("Test check_update_ntrim_sameparity()",{
   expect_equal(check_update_ntrim_sameparity(2,4), 2)
   expect_equal(check_update_ntrim_sameparity(3,5), 3)
   # warning
-  expect_equal(check_update_ntrim_sameparity(2,5), 3)
+  expect_equal(suppressWarnings(check_update_ntrim_sameparity(2,5)), 3)
   expect_warning(check_update_ntrim_sameparity(2,5))
-  expect_equal(check_update_ntrim_sameparity(3,6), 4)
+  expect_equal(suppressWarnings(check_update_ntrim_sameparity(3,6)), 4)
   expect_warning(check_update_ntrim_sameparity(3,6))
 })
 

@@ -9,22 +9,22 @@
 #' @return list containing two elements: (1) vector of values to keep;
 #'   (2) number of ids trimmed
 keep_vals <- function(trim_type, n_trim, n_ids){
-  keep_vals_checks(trim_type, n_trim, n_ids)
+  n_trim_adj <- ntrim_checks(trim_type, n_trim, n_ids)
   # implement trimming
   if(trim_type == "exterior"){
-    return(keep_vals_exterior(n_trim, n_ids))
+    return(keep_vals_exterior(n_trim_adj, n_ids))
   }
   if(trim_type == "interior"){
-    return(keep_vals_interior(n_trim, n_ids))
+    return(keep_vals_interior(n_trim_adj, n_ids))
   }
 }
 
 #### helpers --------------------
 
-keep_vals_checks <- function(trim_type, n_trim, n_ids){
+ntrim_checks <- function(trim_type, n_trim, n_ids){
   if(trim_type == "exterior"){n_trim <- check_update_ntrim_even(n_trim)}
   if(trim_type == "interior"){n_trim <- check_update_ntrim_sameparity(n_trim, n_ids)}
-  check_update_ntrim_sameparity(n_trim, n_ids)
+  check_ntrim_vs_nid(n_trim, n_ids)
   return(n_trim)
 }
 
@@ -41,8 +41,8 @@ check_update_ntrim_sameparity <- function(n_trim, n_ids){
   n_ids_par <- n_ids %% 2
   n_trim_par <- n_trim %% 2
   if(n_ids_par != n_trim_par){
-    warning(paste0("Cannot trim ", n_trim, " values, with ", "n_ids", " distributions.
-                   Rounding n_trim up."))
+    warning(paste0("Cannot trim ", n_trim, " values, with ", n_ids, " distributions.
+                   Rounding n_trim up to ", n_trim + 1, "."))
     n_trim<-n_trim+1}
   return(n_trim)
 }
