@@ -54,25 +54,6 @@ create_interp_fns <- function(dat){
   # for each id, subset df and create interpolation
   for(i in unique(dat$id)){
     df_sub <- subset(dat, id == i)
-    # checks, skip id if any of the following conditions are met
-    #   (1) if all quantiles equal to single value
-    #   (2) any quantile contains NA
-    #   (3) non-monotonic values
-    if(length(unique(df_sub$value)) == 1){
-      # to treat as point estimates (single step function) use the commented code
-      # val <- df_sub %>% filter(quantile == 0.5) %>% pull(value)
-      # interp_functions[[i]] <- function(x){ifelse(x < val, 0, ifelse(x == val, 0.5, 1))}
-      warning(paste0('excluding id ',i,': single value for all quantiles'))
-      next
-    }
-    if(any(is.na(df_sub$value))){
-      warning(paste0('excluding id ',i,': NA value'))
-      next
-    }
-    if(any(diff(df_sub %>% dplyr::arrange(quantile) %>% dplyr::pull(value))<0)){
-      warning(paste0('excluding id ',i,': not a cdf'))
-      next
-    }
     interp_functions[[i]] <- approxfun(x = df_sub$value,
                                        y = df_sub$quantile,
                                        method = "linear",
@@ -144,12 +125,6 @@ avg_probs <- function(df_cdfs){
 #' @param vals vector of unique values (specified in \code{evaluate_cdf()} argument \code{vals})
 #' @param ret_q vector of quantiles to return values from aggregate LOP distribution
 LOP_distribution <- function(gdf_cdf, vals, ret_q){
-  # if(nrow(gdf_cdf) == 1){ # check for point estimates - can remove?
-  #   df_agg <- data.frame("quantile" = seq(0,1,0.05), "value" = gdf_cdf$value)
-  # }
-  # else{
-  # in some cases (e.g., trimmed), vals is wider than ids included in LOP avg
-  # leads to excess 0/1 on head/tail of gdf_cdf -- remove in this step
   min_val <- 1
   max_val <- length(vals)
   if(length(which(gdf_cdf == 0))>1){min_val <- max(which(gdf_cdf == 0))}
