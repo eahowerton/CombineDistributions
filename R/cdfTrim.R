@@ -21,7 +21,7 @@
 #'   plus columns specifying \code{direction}, \code{method}, \code{trim_type}, and \code{n_trim}.
 #'   TO DO: MAKE THIS CONSISTENT
 #'
-weights_trim_cdf <- function(data, trim_type, n_trim){
+cdf_trim <- function(data, trim_type, n_trim){
   n_models <- length(unique(data$id))
   keep_vals <- keep_vals(trim_type, n_trim, n_models)$keep
   weighted_data <- implement_trim_cdf(data, keep_vals)

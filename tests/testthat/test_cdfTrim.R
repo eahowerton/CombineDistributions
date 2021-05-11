@@ -6,8 +6,8 @@ suppressMessages({
 source_test_helpers("R/determineTrimVals.R")
 
 
-#### weights_trim_cdf() ####
-test_that("Test weights_trim_cdf()", {
+#### cdf_trim() ####
+test_that("Test cdf_trim()", {
   df_long <- data.frame(id = c(rep("A",3), rep("B",3),rep("C",3)),
                         value = c(1,2,3,1,2,3,1,2,3),
                         quantile = c(0,0.2,0.4,0.1,0.3,0.5,0.2,0.4,0.6))
@@ -19,7 +19,7 @@ test_that("Test weights_trim_cdf()", {
                      quantile = c(0,0.2,0.4,0.1,0.3,0.5,0.2,0.4,0.6),
                      weight = c(rep(1,3), rep(0,3),rep(1,3))) %>%
     group_by(value)
-  expect_identical(weights_trim_cdf(df_long, trim_type, n_trim), expected)
+  expect_identical(cdf_trim(df_long, trim_type, n_trim), expected)
 })
 
 #### trim_cdf() ####
