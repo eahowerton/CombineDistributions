@@ -14,22 +14,21 @@
 #' calculate_aggregate_vin(dat, seq(0,1,0.05))
 #'
 #' @export
-calculate_aggregate_vin <- function(dat, ret_quantiles){ #model_weights
-  #dat <- left_join(dat, model_weights)
-  # calcualte vincent average
-  vinc <- dat %>%
-    dplyr::group_by(quantile) %>%
-    dplyr::summarise(value= mean(value))
-  # return specified quantiles
-  if(all(round(ret_quantiles,4) %in% round(unique(vinc$quantile),4))){ # rounding probably not the best way to handle
-    return(vinc %>% dplyr::filter(round(quantile,4) %in% round(ret_quantiles,4)))
-  }
-  else{
-    warning("more quantiles to return than provided, interpolating missing quantiles")
-    vinc_interp <- approx(vinc$quantile, vinc$value, xout = ret_quantiles)
-    vinc <- tibble::tibble(quantile = vinc_interp$x,
-                   value = vinc_interp$y)
-    return(vinc)
-  }
+vincent <- function(data, ret_quantiles, weight_fn = equal_weights, ...){
+  df_weighted <- weight_fn(data, ...)
+  df_weighted <- remove_zero_weights(df_weighted)
+  df_agg <- calculate_aggregate_vin(df_weighted, ret_quantiles)
+  return(df_agg)
 }
+
+calculate_aggregate_vin <- function(data, ret_quantiles){ #model_weights
+  #dat <- left_join(dat, model_weights)
+  # calculate vincent average
+  vinc <- data %>%
+    dplyr::group_by(quantile) %>%
+    dplyr::summarise(value= weighted.mean(value, weight))
+  vinc_agg <- return_specified_quantiles(vinc, ret_quantiles)
+  return(vinc_agg)
+}
+
 

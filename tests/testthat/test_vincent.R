@@ -1,84 +1,89 @@
 library("testthat")
 
+source_test_helpers("R/utils.R")
+source_test_helpers("R/determineTrimVals.R")
+source_test_helpers("R/cdfTrim.R")
+source_test_helpers("R/meanTrim.R")
+
 #### calculate_aggregate_vin() ####
-test_that("Test calculate_aggregate_vin(): simple example",{
+test_that("Test vincent(): simple example",{
   d <- data.frame(quantile = c(0,0,0.5,0.5,1,1),
                   value = c(1,2,3,4,5,6))
+  d$id <- "A"
   expected <- tibble(quantile = c(0,0.5,1),
                          value = c(1.5,3.5,5.5))
-  expect_identical(calculate_aggregate_vin(d, c(0,0.5,1)), expected)
+  expect_identical(vincent(d, c(0,0.5,1)), expected)
 })
 
-test_that("Test calculate_aggregate_vin: single CDF uniform",{
+test_that("Test vincent: single CDF uniform",{
   quant <- (0:100)/100
-  d <- expand.grid(model = c("A"),
+  d <- expand.grid(id = c("A"),
                    quantile = quant)
   d$value <-  3*d$quantile
   expected <- tibble(quantile = quant,
                          value = 3*quant)
-  expect_equal(calculate_aggregate_vin(d, quant), expected)
+  expect_equal(vincent(d, quant), expected)
 })
 
-test_that("Test calculate_aggregate_vin: multiple CDF uniform",{
+test_that("Test vincent: multiple CDF uniform",{
   quant <- (0:100)/100
-  d <- expand.grid(model = c("A","B"),
+  d <- expand.grid(id = c("A","B"),
                    quantile = quant)
-  d$min <- ifelse(d$model == "A", 0, 1)
+  d$min <- ifelse(d$id == "A", 0, 1)
   d <- d %>% mutate(value = qunif(d$quantile, d$min, d$min + 2)) %>% select(-min)
   expected <- tibble(quantile = quant,
                          value = seq(0.5,2.5,0.02))
-  expect_equal(calculate_aggregate_vin(d, quant), expected)
+  expect_equal(vincent(d, quant), expected)
 })
 
-test_that("Test calculate_aggregate_vin: single CDF normal",{
+test_that("Test vincent: single CDF normal",{
   quant = (0:100)/100
-  d <- expand.grid(model = c("A"),
+  d <- expand.grid(id = c("A"),
                    quantile = quant)
   d$value <-  qnorm(d$quantile)
   expected <- tibble(quantile = quant,
-                         value = qnorm(quant))
-  expect_identical(calculate_aggregate_vin(d, quant), expected)
+                     value = qnorm(quant))
+  expect_identical(vincent(d, quant), expected)
 })
 
-test_that("Test calculate_aggregate_vin: multiple CDF normal",{
+test_that("Test vincent: multiple CDF normal",{
   quant <- (0:100)/100
   d <- expand.grid(mean = 1:2,
                    quantile = quant)
   d <- d %>%
-    mutate(model = LETTERS[mean],
+    mutate(id = LETTERS[mean],
            value = qnorm(quantile, mean, mean)) %>%
-    select(model, quantile, value)
+    select(id, quantile, value)
   expected <- tibble(quantile = quant,
                          value = qnorm(quant, 1.5, 1.5))
-  expect_equal(calculate_aggregate_vin(d, quant), expected)
+  expect_equal(vincent(d, quant), expected)
 })
 
-test_that("Test calculate_aggregate_vin: return subset of quantiles",{
+test_that("Test vincent: return subset of quantiles",{
   quant <- (0:100)/100
   ret_quant <- seq(0,1,0.05)
   d <- expand.grid(mean = 1:2,
                    quantile = quant)
   d <- d %>%
-    mutate(model = LETTERS[mean],
+    mutate(id = LETTERS[mean],
            value = qnorm(quantile, mean, mean)) %>%
-    select(model, quantile, value)
+    select(id, quantile, value)
   expected <- tibble(quantile = ret_quant,
                      value = qnorm(ret_quant, 1.5, 1.5))
-  expect_equal(calculate_aggregate_vin(d, ret_quant), expected)
+  expect_equal(vincent(d, ret_quant), expected)
 })
 
-test_that("Test calculate_aggregate_vin: return additional quantiles",{
+test_that("Test vincent: return additional quantiles",{
   quant <- seq(0,1,0.05)
   ret_quant <- (5:95)/100
   d <- expand.grid(mean = 1:2,
                    quantile = quant)
   d <- d %>%
-    mutate(model = LETTERS[mean],
+    mutate(id = LETTERS[mean],
            value = qnorm(quantile, mean, mean)) %>%
-    select(model, quantile, value)
+    select(id, quantile, value)
   expected <- tibble(quantile = ret_quant,
                      value = approx(quant, qnorm(quant, 1.5, 1.5), ret_quant)$y)
-  expect_warning(calculate_aggregate_vin(d, ret_quant))
-  expect_equal(suppressWarnings(calculate_aggregate_vin(d, ret_quant)), expected)
+  expect_equal(vincent(d, ret_quant), expected)
 })
 
