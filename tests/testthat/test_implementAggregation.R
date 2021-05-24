@@ -4,51 +4,51 @@ suppressMessages({
   library(tibble)
 })
 
-#### aggregate_cdfs() ####
-test_that("Test aggregate_cdfs(): no trim vinc",{
+#### calculate_single_aggregate() ####
+test_that("Test calculate_single_aggregate(): no trim vinc",{
   quant <- seq(0,1,0.5)
   d <- expand.grid(model = c("A","B"),
                    quantile = quant)
   d$value <- d$quantile *2
-  test <- aggregate_cdfs(d, by = "model", method = vincent, ret_quantiles = quant)
+  test <- calculate_single_aggregate(d, id_var = "model", method = vincent, ret_quantiles = quant)
   expected <- tibble(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
 
-test_that("Test aggregate_cdfs(): no trim LOP",{
+test_that("Test calculate_single_aggregate(): no trim LOP",{
   quant <- seq(0,1,0.5)
   d <- expand.grid(model = c("A","B"),
                    quantile = quant)
   d$value <- d$quantile *2
-  test <- aggregate_cdfs(d, by = "model", method = LOP, ret_quantiles = quant)
+  test <- calculate_single_aggregate(d, id_var = "model", method = LOP, ret_quantiles = quant)
   expected <- tibble(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
 
-test_that("Test aggregate_cdfs(): no trim LOP, different ret_quant",{
+test_that("Test calculate_single_aggregate(): no trim LOP, different ret_quant",{
   quant <- seq(0,1,0.5)
   ret_quant <- seq(0,1,0.1)
   d <- expand.grid(model = c("A","B"),
                    quantile = quant)
   d$value <- d$quantile *2
-  test <- aggregate_cdfs(d, by = "model", method = LOP, ret_quantiles = ret_quant)
+  test <- calculate_single_aggregate(d, id_var = "model", method = LOP, ret_quantiles = ret_quant)
   expected <- tibble(quantile = ret_quant, value = ret_quant * 2)
   expect_equal(test, expected)
 })
 
-test_that("Test aggregate_cdfs(): mean interior trim vinc",{
+test_that("Test calculate_single_aggregate(): mean interior trim vinc",{
   quant <- seq(0,1,0.5)
   d <- expand.grid(model = c("A","B","C"),
                    quantile = quant)
   d$value <- ifelse(d$model == "A", d$quantile * 2, ifelse(d$model == "B", d$quantile * 3, d$quantile * 4))
-  test <- aggregate_cdfs(d, by = "model", method = vincent, ret_quantiles = quant, trim = "mean_interior", n_trim = 1)
+  test <- calculate_single_aggregate(d, id_var = "model", method = vincent, ret_quantiles = quant, trim = "mean_interior", n_trim = 1)
   expected <- tibble(quantile = quant, value = quant * 3)
   expect_equal(test, expected)
 })
 
 
 
-#### update_by_col() ####
+#### update_id_var_col() ####
 test_that("Test update_id_var_col()",{
   d <- expand.grid(model = c("A","B"),
                    quantile = seq(0,1,0.5))
