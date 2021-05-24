@@ -121,7 +121,7 @@ test_that("Test LOP: same mean",{
   expect_lt(abs(test_mean),eps)
 })
 
-test_that("Test calculate_aggregate_LOP: return different quantiles",{
+test_that("Test LOP: return different quantiles",{
   eps <- 0.001
   quant <- (1:99)/100
   ret_quant <- c(0.25,0.5,0.75)
@@ -144,33 +144,18 @@ test_that("Test calculate_aggregate_LOP: return different quantiles",{
 # })
 
 
-#### create_interp_fns() ####
-test_that("Test create_interp_fns()",{
-  quant <- (1:99)/100
+#### evaluate_cdf() ####
+test_that("Test evaluate_cdf(): calculation of values",{
+  quant <- seq(0,1,0.1)
   d <- expand.grid(id = c("A","B"),
                    quantile = quant)
   d$value <- ifelse(d$id == "A", 2*d$quantile, 3*d$quantile)
-  test <- create_interp_fns(d)
-  # check characteristics of output
-  expect_length(test, 2)
-  expect_true(is.function(test$A))
-  expect_true(is.function(test$B))
-  # check content of list
-  expect_setequal(test$A(2*quant), quant)
-  expect_setequal(test$B(3*quant), quant)
-})
-
-
-#### evaluate_cdf() ####
-test_that("Test evaluate_cdf(): calculation of values",{
-  interp_fns <- list(approxfun(c(0,2),c(1,1), yleft = 0, yright = 1),
-                     approxfun(c(0,2),c(0,0.5), yleft = 0, yright = 1))
   # check a set of values
-  vals <- -1:3
-  expected <- data.frame(quantile = c(0,rep(1,length(vals)-1), 0,0,0.25,0.5,1),
-                         id = sort(rep(c(1,2), length(vals))),
+  vals <- 0:3
+  expected <- data.frame(quantile = c(0,0.5,1,1,0,1/3,2/3,1),
+                         id = sort(rep(c("A","B"), length(vals))),
                          value = rep(vals,2))
-  expect_equal(evaluate_cdf(vals,interp_fns), expected) # TO DO: figure out why not identical
+  expect_equal(evaluate_cdf(d, vals), expected) # TO DO: figure out why not identical
 })
 
 
