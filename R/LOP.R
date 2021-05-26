@@ -11,9 +11,12 @@
 #' @export
 LOP <- function(data, ret_quantiles, weight_fn = equal_weights, ...){
   # find min/max values across all teams (used as min/max values for agg cdf)
-  limits = c(min(data$value),max(data$value))
-  if(anyNA(limits)){return(NA)}
-  vals <- seq(limits[1], limits[2], length.out = 1000)
+  vals <- unique(data$value)
+  if(length(vals)>1000){
+    limits = c(min(data$value),max(data$value))
+    if(anyNA(limits)){return(NA)
+    }
+    vals <- seq(limits[1], limits[2], length.out = 1000)}
   # interpolate individual cdfs to same values
   df_long <- evaluate_cdf(data, vals)
   df_weighted <- weight_fn(df_long, ...)

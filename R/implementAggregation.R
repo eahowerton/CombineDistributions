@@ -33,9 +33,8 @@ apply_aggregation <- function(data, groups, id_var, method, ret_quantiles, trim 
   for(i in 1:length(groups)){ # TO DO: more efficient way to do this?
     data = data %>% dplyr::filter(.[[names(groups)[i]]] == groups[i])
   }
-  #data = data %>% dplyr::filter(df_grps)
   agg <- calculate_single_aggregate(data, id_var, method, ret_quantiles, trim, n_trim)
-  if(any(is.na(agg))){return(NA)}
+  if(all(is.na(agg))){agg <- data.frame(quantile = ret_quantiles, value = NA)}
   grps_df <- as.data.frame(matrix(rep(groups, times = nrow(agg)), nrow = nrow(agg), byrow = TRUE))
   colnames(grps_df) <- names(groups)
   agg <- agg %>% dplyr::bind_cols(grps_df)
