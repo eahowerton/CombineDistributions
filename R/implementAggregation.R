@@ -35,7 +35,7 @@ apply_aggregation <- function(data, groups, id_var, method, ret_quantiles, trim 
   }
   #data = data %>% dplyr::filter(df_grps)
   agg <- calculate_single_aggregate(data, id_var, method, ret_quantiles, trim, n_trim)
-  if(is.na(agg)){return(NA)}
+  if(any(is.na(agg))){return(NA)}
   grps_df <- as.data.frame(matrix(rep(groups, times = nrow(agg)), nrow = nrow(agg), byrow = TRUE))
   colnames(grps_df) <- names(groups)
   agg <- agg %>% dplyr::bind_cols(grps_df)
