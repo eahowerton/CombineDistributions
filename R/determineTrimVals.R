@@ -24,7 +24,7 @@ keep_vals <- function(trim_type, n_trim, n_ids){
 ntrim_checks <- function(trim_type, n_trim, n_ids){
   if(trim_type == "exterior"){n_trim <- check_update_ntrim_even(n_trim)}
   if(trim_type == "interior"){n_trim <- check_update_ntrim_sameparity(n_trim, n_ids)}
-  check_ntrim_vs_nid(n_trim, n_ids)
+  n_trim <- check_ntrim_vs_nid(n_trim, n_ids)
   return(n_trim)
 }
 
@@ -48,12 +48,14 @@ check_update_ntrim_sameparity <- function(n_trim, n_ids){
 }
 
 check_ntrim_vs_nid <- function(n_trim, n_ids){
-  if(n_trim >= n_ids){
-    stop("Trying to trim more values than available (interior).")
-  }
   if(n_trim <= 0){
     stop("Number to trim <= 0.")
   }
+  if(n_trim >= n_ids){
+    n_trim <- 0
+    warning("Trying to trim more values than available. Aggregating without trimming.")
+  }
+  return(n_trim)
 }
 
 #' Setup exterior trimming

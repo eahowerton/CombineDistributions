@@ -38,7 +38,8 @@ test_that("Test check_update_ntrim_sameparity()",{
 test_that("Test check_ntrim_vs_nid()",{
   expect_error(check_ntrim_vs_nid(0,4))
   expect_error(check_ntrim_vs_nid(-1,4))
-  expect_error(check_ntrim_vs_nid(5,4))
+  test <- suppressWarnings(check_ntrim_vs_nid(5,4))
+  expect_equal(test,0)
 })
 
 #### keep_vals_exterior() ####
