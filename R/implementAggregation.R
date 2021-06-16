@@ -71,7 +71,7 @@ update_id_var_col <- function(data, id_var){
 
 filter_input_data <- function(data){
   data <- data %>% dplyr::filter(!(id %in% check_na_vals(data)))
-  data <- data %>% dplyr::filter(!(id %in% check_num_unq_vals(data)))
+  #data <- data %>% dplyr::filter(!(id %in% check_num_unq_vals(data)))
   data <- data %>% dplyr::filter(!(id %in% check_monotonic(data)))
   return(data)
 }

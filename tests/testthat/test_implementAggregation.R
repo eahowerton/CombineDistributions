@@ -79,19 +79,11 @@ test_that("Test filter_input_data(): non-monotonic",{
   expect_equal(test, d %>% filter(id != "A"))
 })
 
-test_that("Test filter_input_data(): one val",{
-  d <- expand.grid(id = c("A","B"),
-                   quantile = seq(0,1,0.5))
-  d$value <- ifelse(d$id == "A", 1, d$quantile*2)
-  expect_warning(filter_input_data(d))
-  test = suppressWarnings(filter_input_data(d))
-  expect_equal(test, d %>% filter(id != "A"))
-})
-
 test_that("Test filter_input_data(): multiple",{
   d <- expand.grid(id = c("A","B","C"),
                    quantile = seq(0,1,0.5))
-  d$value <- ifelse(d$id == "A", 1, d$quantile*2)
+  d$value <- ifelse(d$id == "A", d$quantile, d$quantile*2)
+  d$value[d$id == "A" & d$quantile == 0.5] = 2
   d[nrow(d),3] = NA
   expect_warning(filter_input_data(d))
   test = suppressWarnings(filter_input_data(d))
@@ -124,19 +116,6 @@ test_that("Test check_monotonic()",{
   expect_equal(test, "B")
   d[nrow(d) - 1,3] = 0
   test = suppressWarnings(check_monotonic(d))
-  expect_equal(test, c("A","B"))
-})
-
-#### check_num_unq_vals() ###
-test_that("Test check_num_unq_vals()",{
-  d <- expand.grid(id = c("A","B"),
-                   quantile = seq(0,1,0.5))
-  d$value <- ifelse(d$id == "A", 1, d$quantile*2)
-  expect_warning(check_num_unq_vals(d))
-  test = suppressWarnings(check_num_unq_vals(d))
-  expect_equal(test, "A")
-  d$value = 1
-  test = suppressWarnings(check_num_unq_vals(d))
   expect_equal(test, c("A","B"))
 })
 

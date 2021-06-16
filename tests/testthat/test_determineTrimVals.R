@@ -11,7 +11,6 @@ test_that("Test keep_vals()",{
   expect_setequal(suppressWarnings(keep_vals("interior", 3, 6)[["keep"]]), c(1,6))
   expect_warning(keep_vals("interior", 3, 6))
   # fail
-  expect_error(suppressWarnings(keep_vals("interior", 5, 6)))
   expect_error(keep_vals("interior", 0, 6))
 })
 

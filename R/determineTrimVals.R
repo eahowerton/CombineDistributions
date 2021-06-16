@@ -53,7 +53,7 @@ check_ntrim_vs_nid <- function(n_trim, n_ids){
   }
   if(n_trim >= n_ids){
     n_trim <- 0
-    warning("Trying to trim more values than available. Aggregating without trimming.")
+    warning("Trying to trim more values than available. Aggregating without trimming.") # THINK ABOUT THIS...
   }
   return(n_trim)
 }
