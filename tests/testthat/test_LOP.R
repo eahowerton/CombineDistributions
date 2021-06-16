@@ -78,7 +78,7 @@ test_that("Test LOP: cdf_trim",{
   d <- d %>% mutate(value = qnorm(d$quantile,d$mean, 1)) %>% select(-mean)
   expected <- data.frame(quantile = quant,
                          value = qnorm(quant))
-  test <- LOP(d, quant, weight_fn = cdf_trim, n_trim = 2, trim_type = "exterior")
+  test <- LOP(d, quant, weight_fn = cdf_trim, n_trim = 2, trim_type = "exterior", avg_dir = "LOP")
   # check characteristics of output
   expect_equal(nrow(test), nrow(expected))
   expect_equal(ncol(test), ncol(expected))

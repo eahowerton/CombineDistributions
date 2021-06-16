@@ -6,6 +6,7 @@
 #' @param data data.frame containing ids, quantiles, and values
 #' @param trim_type string specifying "interior" or "exterior"
 #' @param n_trim integer specifying the number of values to trim
+#' @param avg_dir string indicating the direction of the averaging/trimming; use "LOP" or "vin".
 #'
 #' @return data.frame with columns \code{id}, \code{quantile}, and \code{value} containing trimmed ecdfs
 #'
@@ -21,16 +22,22 @@
 #'   plus columns specifying \code{direction}, \code{method}, \code{trim_type}, and \code{n_trim}.
 #'   TO DO: MAKE THIS CONSISTENT
 #'
-cdf_trim <- function(data, trim_type, n_trim){
+cdf_trim <- function(data, trim_type, n_trim, avg_dir){
   n_models <- length(unique(data$id))
   keep_vals <- keep_vals(trim_type, n_trim, n_models)$keep
-  weighted_data <- implement_trim_cdf(data, keep_vals)
+  weighted_data <- implement_trim_cdf(data, keep_vals, avg_dir)
   return(weighted_data)
 }
 
 #### HELPERS ####
 
-implement_trim_cdf <- function(data, keep_vals){
+implement_trim_cdf <- function(data, keep_vals, avg_dir){
+  if(avg_dir == "LOP"){df_cdfs <- lop_trim_cdf(data, keep_vals)}
+  else if(avg_dir == "vincent"){df_cdfs <- vin_trim_cdf(data, keep_vals)}
+  return(df_cdfs)
+}
+
+lop_trim_cdf <- function(data, keep_vals){
   df_cdfs <- data %>%
     dplyr::group_by(value) %>%
     dplyr::mutate(rank = rank(quantile, ties.method = "first"),
@@ -39,3 +46,11 @@ implement_trim_cdf <- function(data, keep_vals){
   return(df_cdfs)
 }
 
+vin_trim_cdf <- function(data, keep_vals){
+  df_cdfs <- data %>%
+    dplyr::group_by(quantile) %>%
+    dplyr::mutate(rank = rank(value, ties.method = "first"),
+                  weight = ifelse(rank %in% keep_vals, 1, 0)) %>%
+    dplyr::select(-rank)
+  return(df_cdfs)
+}

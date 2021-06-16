@@ -10,7 +10,7 @@ test_that("Test calculate_single_aggregate(): no trim vinc",{
   d <- expand.grid(model = c("A","B"),
                    quantile = quant)
   d$value <- d$quantile *2
-  test <- calculate_single_aggregate(d, id_var = "model", method = vincent, ret_quantiles = quant)
+  test <- calculate_single_aggregate(d, id_var = "model", method = "vincent", ret_quantiles = quant)
   expected <- tibble(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
@@ -20,7 +20,7 @@ test_that("Test calculate_single_aggregate(): no trim LOP",{
   d <- expand.grid(model = c("A","B"),
                    quantile = quant)
   d$value <- d$quantile *2
-  test <- calculate_single_aggregate(d, id_var = "model", method = LOP, ret_quantiles = quant)
+  test <- calculate_single_aggregate(d, id_var = "model", method = "LOP", ret_quantiles = quant)
   expected <- tibble(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
@@ -31,7 +31,7 @@ test_that("Test calculate_single_aggregate(): no trim LOP, different ret_quant",
   d <- expand.grid(model = c("A","B"),
                    quantile = quant)
   d$value <- d$quantile *2
-  test <- calculate_single_aggregate(d, id_var = "model", method = LOP, ret_quantiles = ret_quant)
+  test <- calculate_single_aggregate(d, id_var = "model", method = "LOP", ret_quantiles = ret_quant)
   expected <- tibble(quantile = ret_quant, value = ret_quant * 2)
   expect_equal(test, expected)
 })
@@ -41,7 +41,7 @@ test_that("Test calculate_single_aggregate(): mean interior trim vinc",{
   d <- expand.grid(model = c("A","B","C"),
                    quantile = quant)
   d$value <- ifelse(d$model == "A", d$quantile * 2, ifelse(d$model == "B", d$quantile * 3, d$quantile * 4))
-  test <- calculate_single_aggregate(d, id_var = "model", method = vincent, ret_quantiles = quant, trim = "mean_interior", n_trim = 1)
+  test <- calculate_single_aggregate(d, id_var = "model", method = "vincent", ret_quantiles = quant, trim = "mean_interior", n_trim = 1)
   expected <- tibble(quantile = quant, value = quant * 3)
   expect_equal(test, expected)
 })

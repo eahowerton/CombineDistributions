@@ -7,7 +7,7 @@
 #'   Specify cdf with \code{quantile} and \code{value} columns,
 #' @param id_var string containing the name of the column that identifies unique cdfs
 #' @param group_by vector containing the names of the columns to create unique aggregates for
-#' @param method function name of the method for aggregation. See details for methods.
+#' @param method character name of the method for aggregation. See details for methods.
 #' @param trim string to indicate trimming method (see Details)
 #' @param n_trim integer denoting the number of models to trim
 #'
@@ -15,8 +15,8 @@
 #' @export
 #'
 #' @details Methods include
-#'   1. LOP - simple probability averaging, also called Linear Opinion Pool.
-#'   2. vincent - simple quantile averaging, also called Vincent average.
+#'   1. "LOP" - simple probability averaging, also called Linear Opinion Pool.
+#'   2. "vincent" - simple quantile averaging, also called Vincent average.
 #'   Trim inputs should be one of the following: "cdf_interior", "cdf_exterior",
 #'   "mean_interior", "mean_exterior", or "none" following REF.
 aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, trim = "none", n_trim = NA){
@@ -44,14 +44,19 @@ apply_aggregation <- function(data, groups, id_var, method, ret_quantiles, trim 
 #' export
 calculate_single_aggregate <- function(data, id_var, method, ret_quantiles, trim = "none", n_trim = NA){
   data <- prep_input_data(data, id_var)
+  method_fn <- ifelse(method == "LOP", LOP, vincent)
   if(nrow(data) == 0){return(NA)}
   if(trim == "none"){
-    agg <- method(data, ret_quantiles)
+    agg <- method_fn(data, ret_quantiles)
   }
   else{
     parse <- parse_trim_input(trim)
-    trim_fn <- ifelse(parse[1] == "mean", mean_trim, cdf_trim)
-    agg <- method(data, ret_quantiles, weight_fn = trim_fn, trim_type = parse[2], n_trim)
+    if(parse[1] == "cdf"){
+      agg <- method_fn(data, ret_quantiles, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
+    }
+    else{
+      agg <- method_fn(data, ret_quantiles, weight_fn = mean_trim, trim_type = parse[2], n_trim)
+    }
   }
   return(agg)
 }
