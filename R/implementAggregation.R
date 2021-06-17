@@ -95,13 +95,14 @@ check_na_vals <- function(data){
 
 # cdfs must be non decreasing
 check_monotonic <- function(data){
+  eps <- -0.001
   ids <- unique(data$id)
   n_nonpos_diff <- sapply(ids, function(i){
     newd <- data %>%
       dplyr::filter(id == i) %>%
       dplyr::arrange(quantile)
     diff_vals <- diff(newd$value)
-    return(length(which(diff_vals<0)))
+    return(length(which(diff_vals<eps)))
   })
   rm_ids <- ids[which(n_nonpos_diff > 0)]
   if(length(rm_ids) != 0){
@@ -135,7 +136,7 @@ create_filter_string <- function(groups){
   for(i in 1:length(groups)){
     filter_string[i] = paste0(names(groups[i]), "== '", groups[i],"'")
   }
-  filter_string <- paste0(filter_string, collapse = ',')
+  filter_string <- paste0(filter_string, collapse = ' & ')
   return(filter_string)
 }
 
