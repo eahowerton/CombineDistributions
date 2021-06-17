@@ -41,12 +41,19 @@ evaluate_cdf <- function(dat, vals){
   # for each id, subset df and create interpolation
   for(i in unique(dat$id)){
     df_sub <- subset(dat, id == i)
+    if(length(unique(df_sub$value)) == 1){
+      sub_val <- unique(df_sub$value)
+      interp_functions = rbind(interp_functions,
+                               data.frame(quantile = ifelse(vals < sub_val, 0, 1), id = i, value = vals))
+    }
+    else{
       interp <- approx(x = df_sub$value,
                        y = df_sub$quantile,
                        xout = vals,
                        method = "linear",
                        yleft = 0, yright = 1, rule = 2, ties = list("ordered", max))
       interp_functions = rbind(interp_functions, data.frame(quantile = interp$y, id = i, value = interp$x))
+    }
   }
   return(interp_functions)
 }
