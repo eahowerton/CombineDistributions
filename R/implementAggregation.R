@@ -30,9 +30,7 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, trim =
 }
 
 apply_aggregation <- function(data, groups, id_var, method, ret_quantiles, trim = "none", n_trim = NA){
-  for(i in 1:length(groups)){ # TO DO: more efficient way to do this?
-    data = data %>% dplyr::filter(.[[names(groups)[i]]] == groups[i])
-  }
+  data = data %>% dplyr::filter(eval(parse(text = create_filter_string(groups))))
   agg <- calculate_single_aggregate(data, id_var, method, ret_quantiles, trim, n_trim)
   if(all(is.na(agg))){agg <- data.frame(quantile = ret_quantiles, value = NA)}
   grps_df <- as.data.frame(matrix(rep(groups, times = nrow(agg)), nrow = nrow(agg), byrow = TRUE))
@@ -104,7 +102,7 @@ check_monotonic <- function(data){
       dplyr::arrange(quantile)
     diff_vals <- diff(newd$value)
     return(length(which(diff_vals<0)))
-    })
+  })
   rm_ids <- ids[which(n_nonpos_diff > 0)]
   if(length(rm_ids) != 0){
     warning(paste0('excluding id(s) ',rm_ids,': not a cdf'))
@@ -117,18 +115,27 @@ check_num_unq_vals <- function(data){
   n_unique_vals <- data %>%
     dplyr::group_by(id) %>%
     dplyr::summarise(l = length(unique(value)))
- rm_ids <- n_unique_vals %>%
-   dplyr::filter(l <= 1) %>%
-   dplyr::pull(id)
- if(length(rm_ids) != 0){
-   warning(paste0('excluding id(s) ',rm_ids,': single value for all quantiles'))
- }
- return(as.character(rm_ids))
+  rm_ids <- n_unique_vals %>%
+    dplyr::filter(l <= 1) %>%
+    dplyr::pull(id)
+  if(length(rm_ids) != 0){
+    warning(paste0('excluding id(s) ',rm_ids,': single value for all quantiles'))
+  }
+  return(as.character(rm_ids))
 }
 
 #### HELPERS ####
 parse_trim_input <- function(trim){
   split <- strsplit(trim, "_")[[1]]
   return(split)
+}
+
+create_filter_string <- function(groups){
+  filter_string = rep(NA, length(groups))
+  for(i in 1:length(groups)){
+    filter_string[i] = paste0(names(groups[i]), "== '", groups[i],"'")
+  }
+  filter_string <- paste0(filter_string, collapse = ',')
+  return(filter_string)
 }
 
