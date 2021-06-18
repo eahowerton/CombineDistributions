@@ -1,9 +1,5 @@
 .Rproj.user
 *.DS_Store
 *.Rhistory
-R/.DS_Store
-R/.DS_Store
-R/.DS_Store
-tests/testthat/.DS_Store
-.DS_Store
-.Rhistory
+apply_to_SMH.R
+*.csv
