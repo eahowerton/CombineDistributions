@@ -21,6 +21,7 @@ LOP <- function(data, ret_quantiles, weight_fn = equal_weights, ...){
     }
     vals <- seq(limits[1], limits[2], length.out = 1000)}
   # interpolate individual cdfs to same values
+  browser()
   df_long <- evaluate_cdf(data, vals)
   df_weighted <- weight_fn(df_long, ...)
   df_weighted <- remove_zero_weights(df_weighted)
@@ -38,25 +39,23 @@ calculate_aggregate_LOP <- function(data, ret_quantiles){ #model_weights
 
 evaluate_cdf <- function(data, ret_vals){
   # create df to store interpolations
-  interp_functions <- data.frame(quantile = double(),
-                                 id = character(),
-                                 value = double())
+  interp_functions <- list()
   # for each id, subset df and create interpolation
   for(i in unique(data$id)){
     data_sub <- data[which(id == i),]
     if(data.table::uniqueN(data_sub$value) == 1){
-      interp_functions = interp_functions %>%
-        dplyr::bind_rows(data.frame(quantile = ifelse(ret_vals < unique(data_sub$value), 0, 1), id = i, value = ret_vals))
+      interp_functions[[i]] <- list(quantile = ifelse(ret_vals < unique(data_sub$value), 0, 1), id = i, value = ret_vals)
     }
     else{
       interp <- approx(x = data_sub$value, y = data_sub$quantile,
                        xout = ret_vals, method = "linear",
                        yleft = 0, yright = 1, rule = 2, ties = list("ordered", max))
-      interp_functions = interp_functions %>% dplyr::bind_rows(data.frame(quantile = interp$y, id = i, value = interp$x))
+      interp_functions[[i]] <- list(quantile = interp$y, id = i, value = interp$x)
     }
   }
-  return(interp_functions)
+  return(rbindlist(interp_functions))
 }
+
 
 #### CALCULATE LOP ####
 
