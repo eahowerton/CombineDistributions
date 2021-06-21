@@ -44,7 +44,7 @@ evaluate_cdf <- function(quantile, value, id, ret_vals){
     val_sub <- value[which(id == i)]
     if(length(unique(val_sub)) == 1){
       interp_functions = interp_functions %>%
-        bind_rows(data.frame(quantile = ifelse(ret_vals < unique(val_sub), 0, 1), id = i, value = ret_vals))
+        dplyr::bind_rows(data.frame(quantile = ifelse(ret_vals < unique(val_sub), 0, 1), id = i, value = ret_vals))
     }
     else{
       interp <- approx(x = val_sub,
@@ -52,7 +52,7 @@ evaluate_cdf <- function(quantile, value, id, ret_vals){
                        xout = ret_vals,
                        method = "linear",
                        yleft = 0, yright = 1, rule = 2, ties = list("ordered", max))
-      interp_functions = interp_functions %>% bind_rows(data.frame(quantile = interp$y, id = i, value = interp$x))
+      interp_functions = interp_functions %>% dplyr::bind_rows(data.frame(quantile = interp$y, id = i, value = interp$x))
     }
   }
   return(interp_functions)
