@@ -2,6 +2,7 @@ suppressMessages({
   library(testthat)
   library(dplyr)
   library(tibble)
+  library(data.table)
 })
 
 #### calculate_single_aggregate() ####

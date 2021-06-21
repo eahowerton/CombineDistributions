@@ -4,7 +4,7 @@
 \alias{cdf_trim}
 \title{Implement cdf trimming - TO UPDATE}
 \usage{
-cdf_trim(data, trim_type, n_trim)
+cdf_trim(data, trim_type, n_trim, avg_dir)
 }
 \arguments{
 \item{data}{data.frame containing ids, quantiles, and values}
@@ -12,6 +12,8 @@ cdf_trim(data, trim_type, n_trim)
 \item{trim_type}{string specifying "interior" or "exterior"}
 
 \item{n_trim}{integer specifying the number of values to trim}
+
+\item{avg_dir}{string indicating the direction of the averaging/trimming; use "LOP" or "vin".}
 }
 \value{
 data.frame with columns \code{id}, \code{quantile}, and \code{value} containing trimmed ecdfs

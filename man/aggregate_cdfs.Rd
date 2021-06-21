@@ -22,7 +22,7 @@ Specify cdf with \code{quantile} and \code{value} columns,}
 
 \item{group_by}{vector containing the names of the columns to create unique aggregates for}
 
-\item{method}{function name of the method for aggregation. See details for methods.}
+\item{method}{character name of the method for aggregation. See details for methods.}
 
 \item{trim}{string to indicate trimming method (see Details)}
 
@@ -38,8 +38,8 @@ cdf using specified method.
 \details{
 Methods include
 \enumerate{
-\item LOP - simple probability averaging, also called Linear Opinion Pool.
-\item vincent - simple quantile averaging, also called Vincent average.
+\item "LOP" - simple probability averaging, also called Linear Opinion Pool.
+\item "vincent" - simple quantile averaging, also called Vincent average.
 Trim inputs should be one of the following: "cdf_interior", "cdf_exterior",
 "mean_interior", "mean_exterior", or "none" following REF.
 }

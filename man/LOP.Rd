@@ -4,12 +4,12 @@
 \alias{LOP}
 \title{Implement probability averaging}
 \usage{
-LOP(data, ret_quantiles, weight_fn = equal_weights, ...)
+LOP(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...)
 }
 \arguments{
-\item{data}{data.frame containing \code{quantile}, \code{value} columns}
-
 \item{ret_quantiles}{vector of quantiles to return specifying the aggregate distribution}
+
+\item{data}{data.frame containing \code{quantile}, \code{value} columns}
 }
 \description{
 Given a set of cumulative distribution functions  (assume for now: defined on same values),

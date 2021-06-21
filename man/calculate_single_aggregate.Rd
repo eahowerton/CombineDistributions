@@ -5,8 +5,9 @@
 \title{export}
 \usage{
 calculate_single_aggregate(
-  data,
-  id_var,
+  quant,
+  val,
+  id,
   method,
   ret_quantiles,
   trim = "none",
