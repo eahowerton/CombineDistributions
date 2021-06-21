@@ -36,15 +36,15 @@ calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, tr
   method_fn <- ifelse(method == "LOP", LOP, vincent)
   if(nrow(data) == 0){return(NA)}
   if(trim == "none"){
-    agg <- method_fn(data, ret_quantiles)
+    agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles)
   }
   else{
     parse <- parse_trim_input(trim)
     if(parse[1] == "cdf"){
-      agg <- method_fn(data, ret_quantiles, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
+      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
     }
     else{
-      agg <- method_fn(data, ret_quantiles, weight_fn = mean_trim, trim_type = parse[2], n_trim)
+      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, weight_fn = mean_trim, trim_type = parse[2], n_trim)
     }
   }
   return(data.frame(quantile = ret_quantiles, value = agg))
