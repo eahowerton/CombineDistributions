@@ -41,19 +41,19 @@ apply_aggregation <- function(data, groups, id_var, method, ret_quantiles, trim 
 
 #' export
 calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, trim = "none", n_trim = NA){
-  data <- prep_input_data(quant, val, id)
+#  data <- prep_input_data(data, id_var)
   method_fn <- ifelse(method == "LOP", LOP, vincent)
-  if(nrow(data) == 0){return(NA)}
+#  if(nrow(data) == 0){return(NA)}
   if(trim == "none"){
-    agg <- method_fn(data, ret_quantiles)
+    agg <- method_fn(quant, val, id, ret_quantiles)
   }
   else{
     parse <- parse_trim_input(trim)
     if(parse[1] == "cdf"){
-      agg <- method_fn(data, ret_quantiles, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
+      agg <- method_fn(quant, val, id, ret_quantiles, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
     }
     else{
-      agg <- method_fn(data, ret_quantiles, weight_fn = mean_trim, trim_type = parse[2], n_trim)
+      agg <- method_fn(quant, val, id, ret_quantiles, weight_fn = mean_trim, trim_type = parse[2], n_trim)
     }
   }
   return(data.frame(quantile = ret_quantiles, value = agg))
@@ -61,10 +61,21 @@ calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, tr
 
 
 #### PREP INPUT DATA ####
-prep_input_data <- function(quant, val, id){
-  data <- data.table::data.table(id = id, quantile = quant, value = val)
-  data <- data[!(id %in% check_na_vals(data)),]
-  data <- data[!(id %in% check_monotonic(data)),]
+prep_input_data <- function(data, id_var){
+  data <- update_id_var_col(data, id_var)
+  data <- filter_input_data(data)
+}
+
+update_id_var_col <- function(data, id_var){
+  group_index <- which(colnames(data) == id_var)
+  colnames(data)[group_index] = "id"
+  return(data)
+}
+
+filter_input_data <- function(data){
+  data <- data %>% dplyr::filter(!(id %in% check_na_vals(data)))
+  #data <- data %>% dplyr::filter(!(id %in% check_num_unq_vals(data)))
+  data <- data %>% dplyr::filter(!(id %in% check_monotonic(data)))
   return(data)
 }
 
@@ -100,6 +111,19 @@ check_monotonic <- function(data){
   return(as.character(rm_ids))
 }
 
+# cannot have a single value for all quantiles
+check_num_unq_vals <- function(data){
+  n_unique_vals <- data %>%
+    dplyr::group_by(id) %>%
+    dplyr::summarise(l = length(unique(value)))
+  rm_ids <- n_unique_vals %>%
+    dplyr::filter(l <= 1) %>%
+    dplyr::pull(id)
+  if(length(rm_ids) != 0){
+    warning(paste0('excluding id(s) ',rm_ids,': single value for all quantiles'))
+  }
+  return(as.character(rm_ids))
+}
 
 #### HELPERS ####
 parse_trim_input <- function(trim){
