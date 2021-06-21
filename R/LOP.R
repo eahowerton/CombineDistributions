@@ -9,20 +9,20 @@
 #' @weight_fn function? specifying how to weight each model *FIX
 #'
 #' @export
-LOP <- function(data, ret_quantiles, weight_fn = equal_weights, ...){
+LOP <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...){
   # find min/max values across all teams (used as min/max values for agg cdf)
-  vals <- unique(data$value)
+  vals <- unique(value)
   if(length(vals)>1000){
-    limits = c(min(data$value),max(data$value))
+    limits = c(min(value),max(data$value))
     if(anyNA(limits)){return(NA)
     }
     vals <- seq(limits[1], limits[2], length.out = 1000)}
   # interpolate individual cdfs to same values
-  df_long <- evaluate_cdf(data, vals)
+  df_long <- evaluate_cdf(quantile, value, id, vals)
   df_weighted <- weight_fn(df_long, ...)
   df_weighted <- remove_zero_weights(df_weighted)
   df_agg <- calculate_aggregate_LOP(df_weighted, ret_quantiles)
-  return(df_agg)
+  return(df_agg$value)
 }
 
 calculate_aggregate_LOP <- function(data, ret_quantiles){ #model_weights
@@ -33,26 +33,26 @@ calculate_aggregate_LOP <- function(data, ret_quantiles){ #model_weights
 
 #### PREP DISTRIBUTION FOR LOP ####
 
-evaluate_cdf <- function(dat, vals){
+evaluate_cdf <- function(quantile, value, id, ret_vals){
   # create df to store interpolations
   interp_functions <- data.frame(quantile = double(),
                                  id = character(),
                                  value = double())
   # for each id, subset df and create interpolation
-  for(i in unique(dat$id)){
-    df_sub <- subset(dat, id == i)
-    if(length(unique(df_sub$value)) == 1){
-      sub_val <- unique(df_sub$value)
-      interp_functions = rbind(interp_functions,
-                               data.frame(quantile = ifelse(vals < sub_val, 0, 1), id = i, value = vals))
+  for(i in unique(id)){
+    quant_sub <- quantile[which(id == i)]
+    val_sub <- value[which(id == i)]
+    if(length(unique(val_sub)) == 1){
+      interp_functions = interp_functions %>%
+        bind_rows(data.frame(quantile = ifelse(ret_vals < unique(val_sub), 0, 1), id = i, value = ret_vals))
     }
     else{
-      interp <- approx(x = df_sub$value,
-                       y = df_sub$quantile,
-                       xout = vals,
+      interp <- approx(x = val_sub,
+                       y = quant_sub,
+                       xout = ret_vals,
                        method = "linear",
                        yleft = 0, yright = 1, rule = 2, ties = list("ordered", max))
-      interp_functions = rbind(interp_functions, data.frame(quantile = interp$y, id = i, value = interp$x))
+      interp_functions = interp_functions %>% bind_rows(data.frame(quantile = interp$y, id = i, value = interp$x))
     }
   }
   return(interp_functions)
