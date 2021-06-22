@@ -25,14 +25,15 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, trim =
   data <- update_id_var_col(data, id_var)
   data.table::setDT(data)
   aggs <- data[,calculate_single_aggregate(quant = quantile, val = value, id = id,
-                                              method = "LOP", ret_quantiles = c(0.25,0.5,0.75)),
+                                              method = "LOP", ret_quantiles = c(0.25,0.5,0.75),
+                                           trim = trim, n_trim = n_trim),
                by = group_by]
   return(aggs)
 }
 
 #' export
 calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, trim = "none", n_trim = NA){
-  data <- prep_input_data(quant, val, id, id_var)
+  data <- prep_input_data(quant, val, id)
   method_fn <- ifelse(method == "LOP", LOP, vincent)
   if(nrow(data) == 0){return(NA)}
   if(trim == "none"){
@@ -52,12 +53,12 @@ calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, tr
 
 
 #### PREP INPUT DATA ####
-prep_input_data <- function(quant, val, id, id_var){
-  data <- data.table::data.table(id = id, quantile = quant, value = val)
+prep_input_data <- function(quant_col, val_col, id_col){
+  data <- data.table::data.table(id = id_col, quantile = quant_col, value = val_col)
   rm_na <- check_na_vals(data)
-  data <- data[!(id %in% rm_na)]
+  data <- data[!(id %in% rm_na$id)]
   rm_nonmono <- check_monotonic(data)
-  data <- data[!(id %in% rm_nonmono)]
+  data <- data[!(id %in% rm_nonmono$id)]
   return(data)
 }
 
@@ -67,9 +68,9 @@ check_na_vals <- function(data){
   na_vals <- data[is.na(value), .(id)]
   rm_ids <- unique(na_vals)
   if(nrow(rm_ids) != 0){
-    warning(paste0('excluding id(s) ',rm_ids,': NA value'))
+    warning(paste0('excluding id(s) ',as.character(rm_ids),': NA value'))
   }
-  return(as.character(rm_ids))
+  return(rm_ids)
 }
 
 # cdfs must be non decreasing
@@ -79,9 +80,9 @@ check_monotonic <- function(data){
   rm_ids <- diff_data[dif < eps, .(id)]
   rm_ids <- unique(rm_ids)
   if(nrow(rm_ids) != 0){
-    warning(paste0('excluding id(s) ',rm_ids$id,': not a cdf'))
+    warning(paste0('excluding id(s) ',as.character(rm_ids$id),': not a cdf'))
   }
-  return(as.character(rm_ids))
+  return(rm_ids)
 }
 
 #### HELPERS ####

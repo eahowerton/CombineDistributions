@@ -14,11 +14,12 @@
 #' calculate_aggregate_vin(dat, seq(0,1,0.05))
 #'
 #' @export
-vincent <- function(data, ret_quantiles, weight_fn = equal_weights, ...){
+vincent <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...){
+  data = data.table::data.table(id = id, quantile = quantile, value = value)
   df_weighted <- weight_fn(data, ...)
   df_weighted <- remove_zero_weights(df_weighted)
   df_agg <- calculate_aggregate_vin(df_weighted, ret_quantiles)
-  return(df_agg)
+  return(df_agg$value)
 }
 
 calculate_aggregate_vin <- function(data, ret_quantiles){ #model_weights

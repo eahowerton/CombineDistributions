@@ -10,9 +10,8 @@ test_that("Test vincent(): simple example",{
   d <- data.frame(quantile = c(0,0,0.5,0.5,1,1),
                   value = c(1,2,3,4,5,6))
   d$id <- "A"
-  expected <- tibble(quantile = c(0,0.5,1),
-                         value = c(1.5,3.5,5.5))
-  expect_identical(vincent(d, c(0,0.5,1)), expected)
+  expected <- c(1.5,3.5,5.5)
+  expect_identical(vincent(d$quantile, d$value, d$id, c(0,0.5,1)), expected)
 })
 
 test_that("Test vincent: single CDF uniform",{
@@ -20,9 +19,8 @@ test_that("Test vincent: single CDF uniform",{
   d <- expand.grid(id = c("A"),
                    quantile = quant)
   d$value <-  3*d$quantile
-  expected <- tibble(quantile = quant,
-                         value = 3*quant)
-  expect_equal(vincent(d, quant), expected)
+  expected <- 3*quant
+  expect_equal(vincent(d$quantile, d$value, d$id, quant), expected)
 })
 
 test_that("Test vincent: multiple CDF uniform",{
@@ -31,9 +29,8 @@ test_that("Test vincent: multiple CDF uniform",{
                    quantile = quant)
   d$min <- ifelse(d$id == "A", 0, 1)
   d <- d %>% mutate(value = qunif(d$quantile, d$min, d$min + 2)) %>% select(-min)
-  expected <- tibble(quantile = quant,
-                         value = seq(0.5,2.5,0.02))
-  expect_equal(vincent(d, quant), expected)
+  expected <- seq(0.5,2.5,0.02)
+  expect_equal(vincent(d$quantile, d$value, d$id, quant), expected)
 })
 
 test_that("Test vincent: single CDF normal",{
@@ -41,9 +38,8 @@ test_that("Test vincent: single CDF normal",{
   d <- expand.grid(id = c("A"),
                    quantile = quant)
   d$value <-  qnorm(d$quantile)
-  expected <- tibble(quantile = quant,
-                     value = qnorm(quant))
-  expect_identical(vincent(d, quant), expected)
+  expected <- qnorm(quant)
+  expect_identical(vincent(d$quantile, d$value, d$id, quant), expected)
 })
 
 test_that("Test vincent: multiple CDF normal",{
@@ -54,9 +50,8 @@ test_that("Test vincent: multiple CDF normal",{
     mutate(id = LETTERS[mean],
            value = qnorm(quantile, mean, mean)) %>%
     select(id, quantile, value)
-  expected <- tibble(quantile = quant,
-                         value = qnorm(quant, 1.5, 1.5))
-  expect_equal(vincent(d, quant), expected)
+  expected <- qnorm(quant, 1.5, 1.5)
+  expect_equal(vincent(d$quantile, d$value, d$id, quant), expected)
 })
 
 test_that("Test vincent: return subset of quantiles",{
@@ -68,9 +63,8 @@ test_that("Test vincent: return subset of quantiles",{
     mutate(id = LETTERS[mean],
            value = qnorm(quantile, mean, mean)) %>%
     select(id, quantile, value)
-  expected <- tibble(quantile = ret_quant,
-                     value = qnorm(ret_quant, 1.5, 1.5))
-  expect_equal(vincent(d, ret_quant), expected)
+  expected <- qnorm(ret_quant, 1.5, 1.5)
+  expect_equal(vincent(d$quantile, d$value, d$id, ret_quant), expected)
 })
 
 test_that("Test vincent: return additional quantiles",{
@@ -82,8 +76,7 @@ test_that("Test vincent: return additional quantiles",{
     mutate(id = LETTERS[mean],
            value = qnorm(quantile, mean, mean)) %>%
     select(id, quantile, value)
-  expected <- tibble(quantile = ret_quant,
-                     value = approx(quant, qnorm(quant, 1.5, 1.5), ret_quant)$y)
-  expect_equal(vincent(d, ret_quant), expected)
+  expected <- approx(quant, qnorm(quant, 1.5, 1.5), ret_quant)$y
+  expect_equal(vincent(d$quantile, d$value, d$id, ret_quant), expected)
 })
 
