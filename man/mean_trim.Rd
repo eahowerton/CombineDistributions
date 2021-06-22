@@ -7,16 +7,16 @@
 mean_trim(data, trim_type, n_trim)
 }
 \arguments{
+\item{data}{data.frame containing columns for \code{id}, \code{quantile}, \code{value}}
+
 \item{trim_type}{"interior" for omitting central distributions or
 "exterior" for omitting outermost distributions}
 
 \item{n_trim}{integer, number of ids to trim}
-
-\item{avg_dir}{"LOP" for probability averaging or "vincent" for quantile averaging}
 }
 \value{
-data.frame containing \code{quantile} and \code{value} of aggregate distribution,
-plus columns specifying \code{direction}, \code{method}, \code{trim_type}, and \code{n_trim}.
+data.frame containing original \code{data} argument plus additional column for \code{weight},
+which specifies which cdfs are excluded (i.e., given 0 weight)
 }
 \description{
 Trim entire distribution based on mean value ADD REF.

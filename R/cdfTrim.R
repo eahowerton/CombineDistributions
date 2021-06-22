@@ -3,12 +3,11 @@
 #' Cdf trimming removes a set number of innermost/outermost probabilities.
 #'   at each value before averaging **ADD REF**.
 #'
-#' @param data data.frame containing ids, quantiles, and values
-#' @param trim_type string specifying "interior" or "exterior"
-#' @param n_trim integer specifying the number of values to trim
-#' @param avg_dir string indicating the direction of the averaging/trimming; use "LOP" or "vin".
-#'
-#' @return data.frame with columns \code{id}, \code{quantile}, and \code{value} containing trimmed ecdfs
+#' @param data data.frame containing columns for \code{id}, \code{quantile}, \code{value}
+#' @param trim_type "interior" for omitting central distributions or
+#'   "exterior" for omitting outermost distributions
+#' @param n_trim integer, number of ids to trim
+#' @param avg_dir string specifying whether averaging is "vincent" or "LOP"
 #'
 #' @details \code{keep_vals} should contain integer values between 1 and \code{n_id},
 #'   the number of unique ids. Then, at each value, \code{trim_cdf()} will order probabilities and
@@ -16,12 +15,8 @@
 #'   \code{keep_vals = 2:4}, \code{trim_cdf()} will return the second, third and fourth ranked probability,
 #'   excluding the smallest and larges probabilities from the average.
 #'
-#'
-#' @inheritParams mean_trim
-#' @return data.frame containing \code{quantile} and \code{value} of aggregate distribution,
-#'   plus columns specifying \code{direction}, \code{method}, \code{trim_type}, and \code{n_trim}.
-#'   TO DO: MAKE THIS CONSISTENT
-#'
+#' @return data.frame containing original \code{data} argument plus additional column for \code{weight},
+#' which specifies which values are excluded (i.e., given 0 weight)
 cdf_trim <- function(data, trim_type, n_trim, avg_dir){
   n_models <- length(unique(data$id))
   keep_vals <- keep_vals(trim_type, n_trim, n_models)$keep

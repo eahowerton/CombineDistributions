@@ -2,15 +2,10 @@
 #'
 #' Trim entire distribution based on mean value ADD REF.
 #'
-#' @inheritParams calculate_aggregate_LOP
-#' @param n_trim integer, number of ids to trim
-#' @param trim_type "interior" for omitting central distributions or
-#'   "exterior" for omitting outermost distributions
-#' @param avg_dir "LOP" for probability averaging or "vincent" for quantile averaging
+#' @inheritParams cdf_trim
 #'
-#' @return data.frame containing \code{quantile} and \code{value} of aggregate distribution,
-#'   plus columns specifying \code{direction}, \code{method}, \code{trim_type}, and \code{n_trim}.
-#' @export
+#' @return data.frame containing original \code{data} argument plus additional column for \code{weight},
+#' which specifies which cdfs are excluded (i.e., given 0 weight)
 mean_trim <- function(data, trim_type, n_trim){
   n_models <- length(unique(data$id))
   keep_vals <- keep_vals(trim_type, n_trim, n_models)$keep
@@ -21,7 +16,6 @@ mean_trim <- function(data, trim_type, n_trim){
 
 
 #### HELPERS ####
-
 approx_cdf_mean <- function(df_cdf){
   mn <- 0
   for(i in 1:(length(df_cdf$quantile)-1)){

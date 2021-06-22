@@ -4,10 +4,19 @@
 \alias{vincent}
 \title{Implement quantile averaging}
 \usage{
-vincent(data, ret_quantiles, weight_fn = equal_weights, ...)
+vincent(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...)
+}
+\arguments{
+\item{quantile}{vector containing quantiles for all cdfs to be aggregated}
+
+\item{value}{vector containing values for all cdfs to be aggregated}
+
+\item{id}{vector containing unqiue ids to distinguish cdf to be aggregated}
+
+\item{ret_quantiles}{vector of quantiles to return specifying the aggregate distribution}
 }
 \value{
-A data.frame with \code{quantile} and \code{value} of quantile averaged aggregate.
+vector of values for corresponding \code{ret_quantiles} of aggregate distribution
 }
 \description{
 Given a set of cumulative distribution functions  (assume for now: defined on same values),
@@ -18,6 +27,6 @@ This method calculates the (weighted) average of values at a given quantile
 dat <- expand.grid(id = c("A", "B"),
                    quantile = seq(0,1,0.01))
 dat$value <- ifelse(dat$id == "A", qnorm(dat$quantile), qnorm(dat$quantile, 0,2))
-calculate_aggregate_vin(dat, seq(0,1,0.05))
+vincent(dat$quantile, dat$value, dat$id, seq(0,1,0.05))
 
 }

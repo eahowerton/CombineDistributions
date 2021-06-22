@@ -4,9 +4,19 @@
 #'   combine using probability averaging (also called linear opinion pool). #TODO CITE
 #'   This method calculates the (weighted) average of quantiles at a given value
 #'
-#' @param data data.frame containing \code{quantile}, \code{value} columns
+#' @param quantile vector containing quantiles for all cdfs to be aggregated
+#' @param value vector containing values for all cdfs to be aggregated
+#' @param id vector containing unqiue ids to distinguish cdf to be aggregated
 #' @param ret_quantiles vector of quantiles to return specifying the aggregate distribution
 #' @weight_fn function? specifying how to weight each model *FIX
+#'
+#' @return vector of values for corresponding \code{ret_quantiles} of aggregate distribution
+#'
+#' @examples
+#' dat <- expand.grid(id = c("A", "B"),
+#'                    quantile = seq(0,1,0.01))
+#' dat$value <- ifelse(dat$id == "A", qnorm(dat$quantile), qnorm(dat$quantile, 0,2))
+#' LOP(dat$quantile, dat$value, dat$id, seq(0,1,0.05))
 #'
 #' @export
 LOP <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...){
@@ -25,13 +35,13 @@ LOP <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, .
   return(df_agg$value)
 }
 
+#### HELPERS ####
+
 calculate_aggregate_LOP <- function(data, ret_quantiles){ #model_weights
   df_cdfs <- avg_probs(data)
   agg <- return_specified_quantiles(df_cdfs, ret_quantiles)
   return(agg)
 }
-
-#### PREP DISTRIBUTION FOR LOP ####
 
 evaluate_cdf <- function(quantile, value, id, ret_vals){
   # create df to store interpolations
@@ -57,8 +67,6 @@ evaluate_cdf <- function(quantile, value, id, ret_vals){
   }
   return(interp_functions)
 }
-
-#### CALCULATE LOP ####
 
 avg_probs <- function(df_cdfs){
   gdf_cdf <- df_cdfs %>%

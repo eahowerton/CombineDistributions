@@ -7,20 +7,18 @@
 cdf_trim(data, trim_type, n_trim, avg_dir)
 }
 \arguments{
-\item{data}{data.frame containing ids, quantiles, and values}
+\item{data}{data.frame containing columns for \code{id}, \code{quantile}, \code{value}}
 
-\item{trim_type}{string specifying "interior" or "exterior"}
+\item{trim_type}{"interior" for omitting central distributions or
+"exterior" for omitting outermost distributions}
 
-\item{n_trim}{integer specifying the number of values to trim}
+\item{n_trim}{integer, number of ids to trim}
 
-\item{avg_dir}{string indicating the direction of the averaging/trimming; use "LOP" or "vin".}
+\item{avg_dir}{string specifying whether averaging is "vincent" or "LOP"}
 }
 \value{
-data.frame with columns \code{id}, \code{quantile}, and \code{value} containing trimmed ecdfs
-
-data.frame containing \code{quantile} and \code{value} of aggregate distribution,
-plus columns specifying \code{direction}, \code{method}, \code{trim_type}, and \code{n_trim}.
-TO DO: MAKE THIS CONSISTENT
+data.frame containing original \code{data} argument plus additional column for \code{weight},
+which specifies which values are excluded (i.e., given 0 weight)
 }
 \description{
 Cdf trimming removes a set number of innermost/outermost probabilities.

@@ -4,14 +4,14 @@
 #'   combine using quantile averaging (also called Vincent average).
 #'   This method calculates the (weighted) average of values at a given quantile
 #'
-#' @inheritParams calculate_aggregate_LOP
-#' @return A data.frame with \code{quantile} and \code{value} of quantile averaged aggregate.
+#' @inheritParams LOP
+#' @return vector of values for corresponding \code{ret_quantiles} of aggregate distribution
 #'
 #' @examples
 #' dat <- expand.grid(id = c("A", "B"),
 #'                    quantile = seq(0,1,0.01))
 #' dat$value <- ifelse(dat$id == "A", qnorm(dat$quantile), qnorm(dat$quantile, 0,2))
-#' calculate_aggregate_vin(dat, seq(0,1,0.05))
+#' vincent(dat$quantile, dat$value, dat$id, seq(0,1,0.05))
 #'
 #' @export
 vincent <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...){

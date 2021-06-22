@@ -11,8 +11,6 @@ equal_weights <- function(data){
   return(data)
 }
 
-
-
 return_specified_quantiles <- function(data, ret_quantiles){
   data <- rm_duplicates(data)
   if(length(unique(data$value)) == 1){

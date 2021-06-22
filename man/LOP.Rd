@@ -7,12 +7,26 @@
 LOP(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...)
 }
 \arguments{
-\item{ret_quantiles}{vector of quantiles to return specifying the aggregate distribution}
+\item{quantile}{vector containing quantiles for all cdfs to be aggregated}
 
-\item{data}{data.frame containing \code{quantile}, \code{value} columns}
+\item{value}{vector containing values for all cdfs to be aggregated}
+
+\item{id}{vector containing unqiue ids to distinguish cdf to be aggregated}
+
+\item{ret_quantiles}{vector of quantiles to return specifying the aggregate distribution}
+}
+\value{
+vector of values for corresponding \code{ret_quantiles} of aggregate distribution
 }
 \description{
 Given a set of cumulative distribution functions  (assume for now: defined on same values),
 combine using probability averaging (also called linear opinion pool). #TODO CITE
 This method calculates the (weighted) average of quantiles at a given value
+}
+\examples{
+dat <- expand.grid(id = c("A", "B"),
+                   quantile = seq(0,1,0.01))
+dat$value <- ifelse(dat$id == "A", qnorm(dat$quantile), qnorm(dat$quantile, 0,2))
+LOP(dat$quantile, dat$value, dat$id, seq(0,1,0.05))
+
 }
