@@ -33,19 +33,13 @@ implement_trim_cdf <- function(data, keep_vals, avg_dir){
 }
 
 lop_trim_cdf <- function(data, keep_vals){
-  df_cdfs <- data %>%
-    dplyr::group_by(value) %>%
-    dplyr::mutate(rank = rank(quantile, ties.method = "first"),
-                  weight = ifelse(rank %in% keep_vals, 1, 0)) %>%
-    dplyr::select(-rank)
+  df_cdfs <- data.table::setDT(data)[order(quantile), rank := 1:.N, by = "value"][,weight:= ifelse(rank %in% keep_vals, 1, 0)]
+  df_cdfs <- df_cdfs[, rank := NULL]
   return(df_cdfs)
 }
 
 vin_trim_cdf <- function(data, keep_vals){
-  df_cdfs <- data %>%
-    dplyr::group_by(quantile) %>%
-    dplyr::mutate(rank = rank(value, ties.method = "first"),
-                  weight = ifelse(rank %in% keep_vals, 1, 0)) %>%
-    dplyr::select(-rank)
+  df_cdfs <- data.table::setDT(data)[order(value), rank := 1:.N, by = "quantile"][,weight:= ifelse(rank %in% keep_vals, 1, 0)]
+  df_cdfs <- df_cdfs[, rank := NULL]
   return(df_cdfs)
 }
