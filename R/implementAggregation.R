@@ -25,7 +25,7 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, trim =
   data <- update_id_var_col(data, id_var)
   data.table::setDT(data)
   aggs <- data[,calculate_single_aggregate(quant = quantile, val = value, id = id,
-                                              method = "LOP", ret_quantiles = c(0.25,0.5,0.75),
+                                              method = "LOP", ret_quantiles = ret_quantiles,
                                            trim = trim, n_trim = n_trim),
                by = group_by]
   return(aggs)

@@ -57,7 +57,16 @@ test_that("Test calculate_single_aggregate(): mean interior trim vinc",{
   expect_equal(test, expected)
 })
 
-
+test_that("Test calculate_single_aggregate(): odd quantiles",{
+  quant <- seq(0,1,0.5)
+  d <- expand.grid(model = c("A","B"),
+                   quantile = quant)
+  d$value <- d$quantile *2
+  test <- calculate_single_aggregate(d$quantile, d$value, d$model,
+                                     method = "vincent", ret_quantiles = c(0.1,0.33,0.7))
+  expected <- data.frame(quantile = c(0.1,0.33,0.7), value = c(0.1,0.33,0.7) * 2)
+  expect_equal(test, expected)
+})
 
 #### update_id_var_col() ####
 test_that("Test update_id_var_col()",{
