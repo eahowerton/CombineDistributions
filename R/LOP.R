@@ -23,7 +23,7 @@ LOP <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, .
   # find min/max values across all teams (used as min/max values for agg cdf)
   vals <- unique(value)
   if(length(vals)>1000){
-    limits = c(min(value),max(data$value))
+    limits = c(min(value),max(value))
     if(anyNA(limits)){return(NA)
     }
     vals <- seq(limits[1], limits[2], length.out = 1000)}
