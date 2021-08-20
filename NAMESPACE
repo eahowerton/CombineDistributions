@@ -3,6 +3,7 @@
 export("%>%")
 export(LOP)
 export(aggregate_cdfs)
+export(calculate_aggregate_LOP)
 export(vincent)
 import(data.table)
 importFrom(magrittr,"%>%")

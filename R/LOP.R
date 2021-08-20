@@ -36,7 +36,7 @@ LOP <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, .
 }
 
 #### HELPERS ####
-
+#' @export
 calculate_aggregate_LOP <- function(data, ret_quantiles){ #model_weights
   df_cdfs <- avg_probs(data)
   agg <- return_specified_quantiles(df_cdfs, ret_quantiles)
