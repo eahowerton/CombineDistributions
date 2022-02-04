@@ -18,7 +18,7 @@ return_specified_quantiles <- function(data, ret_quantiles){
                                   value = unique(data$value))
   }
   else{
-    data_interp <- approx(data$quantile, data$value, xout = ret_quantiles, ties = "mean", rule = 2:1)
+    data_interp <- approx(data$quantile, data$value, xout = ret_quantiles, ties = "mean", rule = 2)
     data_return <- tibble::tibble(quantile = data_interp$x,
                                   value = data_interp$y)
   }
