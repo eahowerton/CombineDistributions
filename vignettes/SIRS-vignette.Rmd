@@ -8,7 +8,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include = FALSE}
@@ -18,6 +18,10 @@ knitr::opts_chunk$set(
   message = FALSE,
   comment = "#>"
 )
+
+
+
+fig_path <- "/Users/eah394/Documents/GitHub/aggregation_methods/figures/general_sir/"
 ```
 
 This vignette implements the first case study from [@EAH-ms]. We simulate a multi-model effort to evaluate the performance of various aggregation methods when applied to distributions of public health outcomes. 
@@ -37,7 +41,7 @@ library(tidyr)
 ```
 
 ## SIRS Model
-We use an SIRS (susceptible-infected-recovered-susceptible) model, implemented stochastically with the chain-binomial framework [@bailey_mathematical_1957]. All individuals in the population are classified into one of the three compartments (S,I, or R), and we define how many individuals transition between these states at each time step: 
+We use an SIRS (susceptible-infected-recovered-susceptible) model implemented stochastically with the chain-binomial framework [@bailey_mathematical_1957]. All individuals in the population are classified into one of the three compartments (S,I, or R), and we define how many individuals transition between these states at each time step: 
 
 | Transition | Number of individuals transitioning |
 |------------|------------------------|
@@ -73,7 +77,8 @@ run_cb_sir = function(n_times, sims, IC, beta, gamma, rho){
                         beta=beta,gamma=gamma,rho=rho)
   }
   # calculate metrics of interest based on simulations
-  return(return_obj(ret))
+  return(list(timeseries = ret, 
+              metrics = return_obj(ret)))
 }
 
 # implement chain binomial for single time step
@@ -110,19 +115,19 @@ return_obj = function(out){
 
 ## Defining "multiple models"
 
-We vary the parameters in the SIRS model to represent four distinct models with varying assumptions about the transmission process. There are two types of uncertainty that these models encapsulate: 
+We vary the parameters to represent four distinct models ($A$, $B$, $C$, and $D$) with varying assumptions about the transmission process. There are two types of uncertainty that these models encapsulate: 
 
 1. **parametric  uncertainty** about the transmission rate, $\beta$. We assume that all four models let $\beta \sim N(\mu_\beta, 0.2)$ and that $\mu_\beta$ varies across models, with $\mu_{\beta,A} = 1.2$, $\mu_{\beta,B} = 1.4$, $\mu_{\beta,C} = 1.6$, and $\mu_{\beta,D} = 1.8$.
-2. **structural uncertainty** about the likelihood that immunity will wane over the 52-week projection period, represented by assumptions about $\rho$. We assume there are three ways in which structural uncertainty can be captured in our multi-model ensemble: 
-    * structural uncertainty is *not captured*: all models assume that waning is unlikely over the course of the projection period, i.e., $\rho_{A,B,C,D} = 260$
-    * structural uncertainty is *captured between models*: two models assume that waning is unlikely and two assume it is likely over the course of the projection period, i.e., $\rho_{A,C} = 260$ and $\rho_{B,D} = 26$
-    * structural uncertainty is *captured within models*: all models incorporate both waning possibilities (unlikely and likely) into their projections with equal probability, i.e., $\rho_{A,B,C,D} = [26,260]$
+2. **structural uncertainty** about the waning of immunity, where models either assume transmission follows and SIR model (no waning of immunity, i.e., $rho = 0$) or that transmission follows and SIRS model (immunity wanes, we let $rho = 1/26$). We assume there are three ways in which structural uncertainty can be represented in our multi-model ensemble: 
+    * structural uncertainty is *not represented*: all models assume no waning, i.e., $\rho_{A,B,C,D} = 0$
+    * structural uncertainty is *represented between models*: two models assume no waning and two assume waning, i.e., $\rho_{A,C} = 0$ and $\rho_{B,D} = 1/26$
+    * structural uncertainty is *represented within models*: all models incorporate both waning possibilities into their projections with equal probability, i.e., $\rho_{A,B,C,D} = [1/26,0]$
     
-To implement these cases, we create a `data.frame` of parameter sets to consider.
+To implement these cases, we create a `data.frame` of individual model parameter sets to consider.
 
 ```{r define-parameters}
 # define the number of simulations per model
-n_samples <- 100000
+n_samples <- 10000
 
 # define mean and sd for transmission rate (beta) for each model
 m1_beta <- 1.2; m2_beta <- 1.4; m3_beta <- 1.6; m4_beta <- 1.8
@@ -141,7 +146,7 @@ mu_gamma <- 1; sig_gamma <- 0.1
 gamma <- rnorm(n_samples*4, mu_gamma, sig_gamma) 
 
 # define unique waning rate (rho) for each simulation and structural uncertainty scenario
-rho_unlikely <- 260; rho_likely <- 26
+rho_unlikely <- 0; rho_likely <- 26
 
 # structural uncertainty scenario 1: none
 # no models consider structural uncertainty
@@ -154,8 +159,8 @@ rho_btn <- c(rep(rho_unlikely, n_samples), # model A: waning unlikely
              rep(rho_likely, n_samples))   # model D: waning likely
              
 
-# structural uncertainty scenario 2: within models
-# all models assume likely/unlikely with equal probability
+# structural uncertainty scenario 3: within models
+# all models assume wanings/no waning with equal probability
 rho_win <- rep(c(rep(rho_unlikely, n_samples/2), rep(rho_likely, n_samples/2)),4)
 
 # create data.frame of parameters for each uncertainty scenario
@@ -181,52 +186,65 @@ all_params$rho = with(all_params, ifelse(rho == 0, 0, 1/rho))
 all_params$sim = 1:nrow(all_params)
 ```
 
-## Individual model projections
+Here are the distributions of parameters for each model:
+```{r plot-params, echo = FALSE}
+p_params <- all_params %>%
+  mutate(R0 = beta/gamma, 
+         model = paste("model", model)) %>%
+  reshape2::melt(c("model", "struc_uncert", "sim")) %>%
+  filter(variable != "rho", struc_uncert == "none") %>% # only need one struc scenario because all the same
+  ggplot(aes(x = value, color = model)) + 
+  geom_density(size = 1) + 
+  facet_wrap(vars(variable), 
+             labeller = label_parsed, 
+             scales = "free",
+             ncol = 3) +
+  labs(x = "parameter value", y = "density", subtitle = "A: parametric uncertainty") +
+  scale_color_brewer(palette = "Set1", direction = 0) + 
+  theme_bw() + 
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid = element_blank())
+p_rho <-  all_params %>%
+  mutate(rho = ifelse(rho == 0, "no waning", "waning")) %>%
+  # change variables to factors for plotting
+  mutate(struc_uncert = factor(struc_uncert, levels = c("none", "btn", "win"))) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", 
+                                      "not represented", 
+                                      ifelse(struc_uncert == "btn", 
+                                             "represented between models", 
+                                             "represented within models")), 
+                               levels = c("not represented","represented between models","represented within models")),
+         model = paste("model", model)) %>% 
+  group_by(model, struc_uncert, rho) %>%
+  summarise(N_rho = n()) %>%
+  ggplot(aes(x = model,y = N_rho, fill = rho)) + 
+  geom_col(position = "stack") + 
+  facet_wrap(vars(struc_uncert),
+             ncol = 3, 
+             strip.position = "bottom") +
+  labs(x = "structural uncertainty assumption", y = "number of simulations", subtitle = "B: structural uncertainty") +
+  #scale_alpha_manual(values = c(0.7,1)) +
+  scale_fill_brewer(palette = "Paired", direction = 0, name = "model") + 
+  theme_bw() + 
+  theme(axis.title.x = element_blank(),
+        legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        panel.spacing = unit(0, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside")
+p_params <- plot_grid(p_params, p_rho, ncol = 1, axis = "lr", align = "vh")
 
-We run the simulations for all the parameter sets we've defined. To do so, we need to define the length of the simulation (52 weeks), population size (1000 individuals), and initial conditions (1% infected, all else susceptible).
+ggsave(paste0(fig_path, "param_distributions.pdf"),p_params, width = 12, height = 9)
 
-```{r run-sims}
-# set seed so we can replicate results
-set.seed(20)
-
-# other model parameters
-T <- 52 # length of simulation  (in weeks)
-N <- 1000 # number of individuals in the population
-init = N*c(S = 0.99, I = 0.01, R = 0, C = 0) # initial conditions
-
-# run the chain binomial model
-out <- run_cb_sir(T, nrow(all_params), init , all_params$beta, all_params$gamma, all_params$rho)
-# reshape out 
-out <- out %>% left_join(all_params)
 ```
 
-Then, we summarize these outcomes into distributions (both pdfs and cdfs) for each metric of interest (cumulative and peak cases).
-
-```{r calc-individual-dists}
-# convert to long format
-out <- melt(out, c("sim", "beta", "gamma", "rho", "model", "struc_uncert"))
-
-# CDFs
-q <- 1:99/100
-cdfs <- setDT(out)[,.(value = quantile(value, q), quantile = q), 
-            by = .(model, struc_uncert, variable)]
-
-# PDFs
-pdfs <- setDT(out)[,.(x = density(value)$x, y = density(value)$y),
-                   by = .(model, struc_uncert, variable)]
-```
-
-We plot the distribution of outcomes for individual model projections across the three uncertainty scenarios. 
-
-```{r plot-model-projections, fig.width=9, fig.height = 7}
-# reorder factor 
-pdfs$struc_uncert <- factor(pdfs$struc_uncert, levels = c("none", "btn", "win"))
-pdfs$variable <- factor(pdfs$variable, levels = c("cum_cases", "peak_cases"))
-
+```{r plot-setup, include = FALSE}
 # define facet labels
-labs_struc <- c("atop(Structural~uncertainty~bold(not~captured),all~models~assume~unlikely~reinfection)", 
-               "atop(Structural~uncertainty~bold(captured~between~models),A~and~C~asume~unlikely~B~and~D~assume~likely~reinfection)", 
-               "atop(Structural~uncertainty~bold(captured~within~models),all~models~consider~unlikely~and~likely~reinfection)")
+labs_struc <- c("atop(Structural~uncertainty~bold(not~represented),all~models~assume~no~waning)", 
+               "atop(Structural~uncertainty~bold(represented~between~models),A~and~C~asume~no~waning~B~and~D~assume~waning)", 
+               "atop(Structural~uncertainty~bold(represented~within~models),all~models~consider~waning~and~no~waning)")
 names(labs_struc) <- c("none", "btn", "win")
 
 
@@ -236,14 +254,113 @@ ub_labs <- list(bquote(A:mu[beta]==.(m1_beta)),
                 bquote(D:mu[beta]==.(m4_beta)))
 
   
-labs_struc_simp = c("Structural~uncertainty~bold(not~captured)",
-                    "Structural~uncertainty~bold(captured~between~models)",
-                    "Structural~uncertainty~bold(captured~within~models)")
+labs_struc_simp = c("Structural~uncertainty~bold(not~represented)",
+                    "Structural~uncertainty~bold(represented~between~models)",
+                    "Structural~uncertainty~bold(represented~within~models)")
 names(labs_struc_simp) = c("none", "btn", "win")
 
 
+model_labs <- c(paste0("A:mu[beta]==",m1_beta,"~', '*rho==0"),
+                paste0("B:mu[beta]==",m2_beta,"~', '*rho==0"),
+                paste0("C:mu[beta]==",m3_beta,"~', '*rho==0"),
+                paste0("D:mu[beta]==",m4_beta,"~', '*rho==0"),
+                paste0("A:mu[beta]==",m1_beta,"~', '*rho==0"),
+                paste0("B:mu[beta]==",m2_beta,"~', '*rho==1/26"),
+                paste0("C:mu[beta]==",m3_beta,"~', '*rho==0"),
+                paste0("D:mu[beta]==",m4_beta,"~', '*rho==1/26"),
+                paste0("A:mu[beta]==",m1_beta,"~', '*rho==0*' or '*1/26"),
+                paste0("B:mu[beta]==",m2_beta,"~', '*rho==0*' or '*1/26"),
+                paste0("C:mu[beta]==",m3_beta,"~', '*rho==0*' or '*1/26"),
+                paste0("D:mu[beta]==",m4_beta,"~', '*rho==0*' or '*1/26"))
+
 # define colors
 colrs_mod = rev(paste0("grey",round( seq(0.15, 0.85, length.out = 4),2)*100))
+```
+
+## Individual model projections
+
+We simulate the model using all the parameter sets we've defined. To do so, we need to define the length of the simulation (52 weeks), population size (1000 individuals), and initial conditions (1.5% infected, all else susceptible).
+
+```{r run-sims}
+# set seed so we can replicate results
+set.seed(20)
+
+# other model parameters
+T <- 52 # length of simulation  (in weeks)
+N <- 1000 # number of individuals in the population
+init = N*c(S = 0.985, I = 0.015, R = 0, C = 0) # initial conditions
+
+# run the chain binomial model
+out <- run_cb_sir(T, nrow(all_params), init , all_params$beta, all_params$gamma, all_params$rho)
+# reshape out metrics
+out$metrics <- out$metrics %>% left_join(all_params)
+# reshape out time series
+out$timeseries <- as.data.frame(out$timeseries[,"I",]) %>%
+  mutate(id = 1:n()) %>%
+  reshape2::melt("id") %>%
+  rename(time = variable) %>%
+  mutate(time = as.integer(gsub("V","",time)))
+```
+
+We plot the resulting simulations, which show outbreaks that either fade out or have a second wave depending on assumptions about waning immunity  (green: no waning, orange: waning).
+
+```{r timeseries-individual-dists, fig.width=9, fig.height = 6, echo = FALSE}
+plt <- out$timeseries %>%
+  # pick a few sims randomly to improve plotting speed
+  filter(id%%n_samples %in% sample(n_samples, 200)) %>%
+  # add parameters to each row
+  rename(sim = id) %>%
+  left_join(all_params)
+  
+p_ts = plt %>%
+  # change variables to factors for plotting
+  mutate(struc_uncert = factor(struc_uncert, levels = c("none", "btn", "win"))) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", 
+                                      labs_struc_simp[1], 
+                                      ifelse(struc_uncert == "btn", 
+                                             labs_struc_simp[2], 
+                                             labs_struc_simp[3])), 
+                               levels = labs_struc_simp),
+         model = model_labs[(as.numeric(struc_uncert)-1)*4 + as.numeric(as.factor(model))]) %>%
+  ggplot(aes(x = time, y = value, group = sim, color = as.factor(rho))) + 
+  geom_line(alpha = 0.05) + 
+  facet_wrap(vars(struc_uncert, model), 
+             labeller = label_parsed, 
+             ncol = 4) +
+  labs(x = "week", y = "number of infected individudals") +
+  scale_color_brewer(palette = "Dark2", direction = 0, name = "") + 
+  theme_bw() + 
+  theme(legend.position = "none", 
+        panel.grid = element_blank())
+p_ts
+ggsave(paste0(fig_path, "timeseries.pdf"),p_ts, width = 13, height = 9)
+
+rm(plt)
+```
+
+Then, for each time series we track cumulative and peak cases. We summarize the output into distributions (both pdfs and cdfs) for each metric. For this vignette, we show results only for cumulative cases, though all analyses are performed for peak cases as well.  
+
+```{r calc-individual-dists}
+# convert to long format
+out$metrics <- reshape2::melt(out$metrics, c("sim", "beta", "gamma", "rho", "model", "struc_uncert"))
+
+# CDFs
+q <- 1:99/100
+cdfs <- setDT(out$metrics)[,.(value = quantile(value, q), quantile = q), 
+            by = .(model, struc_uncert, variable)]
+
+# PDFs
+pdfs <- setDT(out$metrics)[,.(x = density(value, adjust = 2)$x, y = density(value, adjust = 2)$y),
+                   by = .(model, struc_uncert, variable)]
+
+```
+
+We plot the distribution of outcomes for individual model projections across the three uncertainty scenarios. 
+
+```{r plot-model-projections, fig.width=9, fig.height = 4, echo = FALSE}
+# reorder factor 
+pdfs$struc_uncert <- factor(pdfs$struc_uncert, levels = c("none", "btn", "win"))
+pdfs$variable <- factor(pdfs$variable, levels = c("cum_cases", "peak_cases"))
 
 # plot
 p1_cumu <- pdfs %>% 
@@ -282,12 +399,11 @@ p1_peak <- pdfs %>%
         legend.key.size = unit(0.3, "cm"),
         legend.margin=margin(0,0,0,0),
         legend.text = element_text(size = rel(0.6)),
-        legend.position = c(0.95,0.84),
+        legend.position = c(0.95,0.78),
         legend.title = element_blank(),
         panel.grid = element_blank(),
         strip.background = element_blank())
-
-plot_grid(p1_cumu, p1_peak + theme(legend.position = "none", strip.text = element_blank()), ncol = 1)
+p1_cumu
 ```
 
 ## Aggregating outcomes
@@ -307,14 +423,16 @@ agg_cdfs <- rbind(
   )
   
 # to get aggregate pdfs, sample from std. uniform and draw from distributions
-agg_pdfs <- agg_cdfs[, .(samps = approx(quantile, value, runif(100000))$y), 
+agg_pdfs <- agg_cdfs[, .(samps = approx(quantile, value, runif(50000))$y), 
                      by = .(struc_uncert, variable, method)] %>%
   .[!is.na(samps)] %>%
-  .[, .(x = density(samps)$x, y = density(samps)$y), 
+  .[, .(x = density(samps, adjust = 1.5)$x, y = density(samps, adjust = 1.5)$y), 
     by = .(struc_uncert, variable, method)]
 ```
 
-```{r plot-aggs, fig.width=9, fig.height = 7}
+We plot the resulting aggregate distributions. 
+
+```{r plot-aggs, fig.width=9, fig.height = 4, echo = FALSE}
 # define aggregate colors
 colrs_agg = c("#377EB8", "#ff7f00")
 
@@ -333,7 +451,7 @@ p2_cumu <- agg_pdfs %>%
   theme_bw() +
   theme(axis.title.y = element_blank(),
         legend.margin=margin(0,0,0,0),
-        legend.position = c(0.94,0.89),
+        legend.position = c(0.94,0.87),
         legend.title = element_blank(),
         panel.grid = element_blank(),
         strip.background = element_blank()
@@ -354,89 +472,257 @@ p2_peak <- agg_pdfs %>%
         panel.grid = element_blank(),
         strip.background = element_blank(), 
         strip.text = element_blank())
-plot_grid(p2_cumu, p2_peak, ncol = 1)
+p2_cumu
 ```
 
 
 ## Evaluating performance
 
-Next we test how well each of these aggregation methods perform, given a range of assumptions about the future. We use the continuous rank probability score (CRPS)
+Next we test how well each of these aggregation methods perform, given a range of assumptions about the future. Our assumptions about the future transmission rate and waning of immunity are
 
-```{r crps}
+| Truth case | True mean transmission rate | True waning of immunity |
+|------------|------------------------|----------------------------- |
+| case 1   | model A assumption is correct, $\mu_\beta = 1.2$ | no waning, SIR |
+| case 2   | model B assumption is correct, $\mu_\beta = 1.4$ | no waning, SIR |
+| case 3   | model C assumption is correct, $\mu_\beta = 1.6$ | no waning, SIR |
+| case 4   | model D assumption is correct, $\mu_\beta = 1.8$ | no waning, SIR |
+| case 5   | truth is mean of model assumptions, $\mu_\beta = 1.5$ | no waning, SIR |
+| case 6   | model A assumption is correct, $\mu_\beta = 1.2$ |  waning, SIRS |
+| case 7   | model B assumption is correct, $\mu_\beta = 1.4$ |  waning, SIRS |
+| case 8   | model C assumption is correct, $\mu_\beta = 1.6$ |  waning, SIRS |
+| case 9   | model D assumption is correct, $\mu_\beta = 1.8$ |  waning, SIRS |
+| case 10   | truth is mean of model assumptions, $\mu_\beta = 1.5$ | waning, SIRS |
+
+We define a `data.frame` with these true parameter values.
+
+```{r future-obs}
+# define the number of synthetic future observations
 n_obs <- 1000
-# beta
+# define true transmission rate
 obs_beta <- c(rnorm(n_obs, m1_beta, sig_beta),
               rnorm(n_obs, m2_beta, sig_beta),
               rnorm(n_obs, m3_beta, sig_beta),
               rnorm(n_obs, m4_beta, sig_beta),
               rnorm(n_obs, mean(c(m1_beta, m2_beta, m3_beta, m4_beta)),sig_beta))
-# gamma
+# define true recovery rate
 obs_gamma <- rnorm(n_obs*5, mu_gamma, sig_gamma) 
-#rho
-obs_params <- rbind(data.frame(beta = obs_beta, gamma = obs_gamma, rho = 1/rho_likely, 
+# define true waning
+obs_params <- rbind(data.frame(beta = obs_beta, gamma = obs_gamma, rho = ifelse(rho_likely == 0, 0, 1/rho_likely), 
                                true_beta = sort(rep(c(paste0("m", 1:4), "mean"), n_obs)),
-                               true_rho = "lik"),
-                    data.frame(beta = obs_beta, gamma = 1/obs_gamma, rho = 1/rho_unlikely, 
+                               true_rho = "Y"),
+                    data.frame(beta = obs_beta, gamma = 1/obs_gamma, rho = ifelse(rho_unlikely == 0, 0, 1/rho_unlikely), 
                                true_beta = sort(rep(c(paste0("m", 1:4), "mean"), n_obs)),
-                               true_rho = "unlik"))
+                               true_rho = "N"))
 obs_params$gamma = with(obs_params, ifelse(gamma == 0, 0, 1/gamma))
 obs_params$sim = 1:nrow(obs_params)
 
-# simulate truth given these params
+# simulate observations given these true params
 obs <- run_cb_sir(T, nrow(obs_params), init, obs_params$beta, obs_params$gamma, obs_params$rho)
+obs <- obs$metrics
 obs <- obs %>% left_join(obs_params)
-obs <- melt(obs, c("sim", "beta", "gamma", "rho", "true_beta", "true_rho"))
+obs <- reshape2::melt(obs, c("sim", "beta", "gamma", "rho", "true_beta", "true_rho"))
+```
 
+Doing so gives the following distribution of observations.
+
+```{r, echo = FALSE, fig.width = 8, fig.height = 6}
+labs_true_rho <- c("true waning:\nnone, SIR", "true waning:\n26 weeks, SIRS")
+names(labs_true_rho) <- c("N", "Y")
+
+labs_true_beta <- c("true transmission:\nA correct", 
+                    "true transmission:\nB correct", 
+                    "true transmission:\nC correct", 
+                    "true transmission:\nD correct", 
+                    "true transmission:\nmean")
+names(labs_true_beta) <- c("m1", "m2", "m3", "m4", "mean")
+
+fut_cum <- obs %>%
+  filter(variable == "cum_cases") %>%
+  ggplot() + 
+  geom_density(aes(x = value)) +
+  facet_grid(cols = vars(true_rho), 
+             rows = vars(true_beta),
+             labeller = labeller(true_beta = labs_true_beta, 
+                                 true_rho = labs_true_rho), 
+             switch = "y") +
+  labs(x = "observed cumulative cases", linetype = "true waning") +
+  scale_x_continuous(labels = comma) +
+  theme_bw()+
+  theme(axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(), 
+        axis.title.y = element_blank(),
+        legend.position = "bottom", 
+        panel.grid = element_blank(), 
+        strip.background = element_blank(), 
+        strip.placement = "outside")
+fut_cum
+
+fut_peak <- obs %>%
+  filter(variable == "peak_cases") %>%
+  ggplot() + 
+  geom_density(aes(x = value)) +
+  facet_grid(cols = vars(true_rho), 
+             rows = vars(true_beta),
+             labeller = labeller(true_beta = labs_true_beta, 
+                                 true_rho = labs_true_rho), 
+             switch = "y") +
+  labs(x = "observed peak cases", linetype = "true waning") +
+  scale_x_continuous(labels = comma) +
+  theme_bw()+
+  theme(axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(), 
+        axis.title.y = element_blank(),
+        legend.position = "bottom", 
+        panel.grid = element_blank(), 
+        strip.background = element_blank(), 
+        strip.placement = "outside")
+```
+
+
+We use the continuous rank probability score (CRPS) to assess performance of the aggregate distributions against these synthetic future observations.
+
+```{r crps}
 # define function to implement CRPS 
-CRPS <- function(q,v,o,size=1000, rule=2, ties="ordered") {
-  x = approx(q,v,runif(size),rule=rule, ties=ties)
-  return(mean(abs(x$y-o[1])) - 1/2*mean(abs(x$y-approx(q,v,runif(size),rule=rule, ties=ties)$y)))
+u1 = runif(10000)
+u2 = runif(10000)
+CRPS <- function(q,v,o,rule=2, ties="ordered") {
+  x = approx(q,v,u1,rule=rule, ties=ties)
+  return(mean(abs(x$y-o[1])) - 1/2*mean(abs(x$y-approx(q,v,u2,rule=rule, ties=ties)$y)))
 }
 
 # implement CRPS
 scores <- obs %>%
+  select(variable, value) %>%
+  unique() %>%
   rename(obs = value) %>%
-  select(true_beta, true_rho, variable, obs) %>% 
   mutate(obs_num = 1:length(obs)) %>%
   dplyr::left_join(agg_cdfs)
 # get CRPS score
 scores <- setDT(scores)[, .(CRPS = CRPS(quantile,value,obs)), 
-                   by=.(method, true_beta, true_rho, variable, struc_uncert, obs_num, obs)]
+                   by=.(method, variable, struc_uncert, obs_num, obs)]
 ```
 
-We summarise the results based on a few key intervals. 
+The CRPS results can be plotted for the LOP and Vincent aggregates across three structural uncertainty scenarios. 
 
-```{r summarise-CRPS}
-# summarize scores to plot
-diff_quant <- setDT(dcast(scores, variable + true_beta + true_rho + 
-                            struc_uncert + obs_num + obs ~ method, 
-                          value.var = "CRPS")) %>%
+```{r plot-CRPS, echo = FALSE, fig.width = 9, fig.height = 4}
+crps_cum <- scores %>%
+  filter(variable == "cum_cases") %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  ggplot(aes(x = obs, y = CRPS, color = method)) + 
+  geom_line(size = 0.8) + 
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = label_parsed) +
+  labs(x = "observed cumulative cases", color = "aggregate") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_x_continuous(labels = comma) +
+  theme_bw() + 
+  theme(legend.position = c(0.92,0.86), 
+        legend.title = element_blank(),
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+crps_cum
+
+crps_peak <- scores %>%
+  filter(variable == "peak_cases") %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  ggplot(aes(x = obs, y = CRPS, color = method)) + 
+  geom_line(size = 0.8) + 
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = label_parsed) +
+  labs(x = "observed peak cases", color = "aggregate") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_x_continuous(labels = comma) +
+  theme_bw() + 
+  theme(legend.position = c(0.92,0.86), 
+        legend.title = element_blank(),
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+```
+
+And we can show when LOP and Vincent perform better by plotting the difference between CRPS for each. 
+
+```{r plot-CRPS-diff, fig.width = 9, fig.height = 4}
+crps_diff_cum <- scores %>%
+  filter(variable == "cum_cases") %>%
+  reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
+  mutate(diff = vincent - LOP) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  ggplot(aes(x = obs, y = diff)) + 
+  geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
+  geom_line() +
+  geom_text(data = data.frame(x = c(0, 0 ),
+                              y  = c(50,-50), 
+                              lab = c("LOP performs better", "vincent performs better"), 
+                              struc_uncert = rep(labs_struc_simp[1], 2)), 
+            aes(x = x, y = y, label = lab, color = lab), angle = 90, size = 3, vjust = 0) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = label_parsed) +
+  labs(x = "observed cumulative cases", y = "CRPS(vincent) - CRPS(LOP)") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_x_continuous(labels = comma) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+crps_diff_cum
+
+crps_diff_peak <- scores %>%
+  filter(variable == "peak_cases") %>%
+  reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
+  mutate(diff = vincent - LOP) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  ggplot(aes(x = obs, y = diff)) + 
+  geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
+  geom_line() +
+  geom_text(data = data.frame(x = c(0, 0 ),
+                              y  = c(50,-50), 
+                              lab = c("LOP performs better", "vincent performs better"), 
+                              struc_uncert = rep(labs_struc_simp[1], 2)), 
+            aes(x = x, y = y, label = lab, color = lab), angle = 90, size = 3, vjust = 0) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = label_parsed) +
+  labs(x = "observed peak cases", y = "CRPS(vincent) - CRPS(LOP)") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_x_continuous(labels = comma) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+
+```
+
+Then, if we combine these score differences with the frequency at which each observation occurs in the synthetic observations, we can generate a distribution of relative performance. We summarize that distribution with a few intervals.  
+
+```{r rel-perf}
+scores_all <- obs %>%
+  left_join(scores, by = c("variable", "value" = "obs")) %>%
+  reshape2::dcast(variable + true_beta + true_rho + struc_uncert + 
+                    value + sim ~ method, value.var = "CRPS") %>%
   # calculate difference to see which method has better CRPS
-  .[,diff := vincent - LOP] %>%
+  mutate(diff = vincent - LOP) %>%
   # summarize distribution of differences
-  .[,.(lower = quantile(diff, 0.025),
+  group_by(variable, true_beta, true_rho, struc_uncert) %>%
+  mutate(lower = quantile(diff, 0.025),
       lower_25 = quantile(diff, 0.25), 
       med = median(diff),
       upper_75 = quantile(diff, 0.75),
-      upper = quantile(diff, 0.975)),
-    by = .(variable, true_beta, true_rho, struc_uncert)] %>% 
-  # for plotting 
-  .[, plot_y := as.numeric(as.factor(true_beta))]
+      upper = quantile(diff, 0.975), 
+      # for plotting
+      plot_y = factor(true_beta)) %>%
+  mutate(plot_y = as.numeric(plot_y))
 ```
 
-Now we plot the outcomes. 
-
-```{r plot-CRPS, fig.width=9, fig.height = 7}
+```{r plot-CRPS2, echo = FALSE, fig.width=9, fig.height = 5}
 # define labels
 labs_m = 1:5
 names(labs_m) = as.character(c(m1_beta, m2_beta, m3_beta, m4_beta, 
                              mean(c(m1_beta, m2_beta, m3_beta, m4_beta))))
 
-labs_rho = c("Reinfection likely", "Reinfection unlikely")
-names(labs_rho) = c("lik", "unlik")
+labs_rho = c("26-week waning immunity, SIRS", "no waning immunity, SIR")
+names(labs_rho) = c("Y", "N")
 
 # plot
-p3_cumu = diff_quant %>% 
+p3_cumu = scores_all %>% 
   filter(variable == "cum_cases") %>%
   mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
   ggplot() +
@@ -452,8 +738,8 @@ p3_cumu = diff_quant %>%
   facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
              labeller = labeller(true_rho = labs_rho, struc_uncert = label_parsed)) +
   scale_color_manual(values = colrs_agg) +
-  scale_x_continuous(limits = c(-max(abs(c(diff_quant$lower, diff_quant$upper))), 
-                                max(abs(c(diff_quant$lower, diff_quant$upper)))),
+  scale_x_continuous(limits = c(-max(abs(c(scores_all$lower, scores_all$upper))), 
+                                max(abs(c(scores_all$lower, scores_all$upper)))),
                      name = "CRPS(Vincent) - CRPS(LOP)") +
   scale_y_reverse(breaks = labs_m, 
                   labels = names(labs_m), 
@@ -464,7 +750,9 @@ p3_cumu = diff_quant %>%
         panel.grid = element_blank(),
         strip.background = element_blank(),
         strip.placement = "outside")
-p3_peak = diff_quant %>% 
+p3_cumu
+
+p3_peak = scores_all %>% 
   filter(variable == "peak_cases") %>%
   mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
   ggplot() +
@@ -479,8 +767,8 @@ p3_peak = diff_quant %>%
   geom_pointrange(aes(x = med, y = plot_y, xmin = lower, xmax = upper)) +
   facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
              labeller = labeller(true_rho = labs_rho, struc_uncert = label_parsed)) +  scale_color_manual(values = colrs_agg) +
-  scale_x_continuous(limits = c(-max(abs(c(diff_quant$lower, diff_quant$upper))), 
-                                max(abs(c(diff_quant$lower, diff_quant$upper)))),
+  scale_x_continuous(limits = c(-max(abs(c(scores_all$lower, scores_all$upper))), 
+                                max(abs(c(scores_all$lower, scores_all$upper)))),
                      name = "CRPS(Vincent) - CRPS(LOP)") +
   scale_y_reverse(breaks = labs_m, 
                   labels = names(labs_m), 
@@ -491,35 +779,23 @@ p3_peak = diff_quant %>%
         panel.grid = element_blank(),
         strip.background = element_blank(),
         strip.placement = "outside")
-
-plot_grid(p3_cumu, p3_peak, ncol = 1)
 ```
 
-## Manuscript figures
 
-We combined these plots to generate Figure 3 and 4 in [@EAH-ms]. 
-
-### Figure 3
-
-```{r Fig3, echo = FALSE, fig.width=12, fig.height = 10}
+```{r Fig3, include = FALSE, fig.width=12, fig.height = 10}
 plot_grid(
   p1_cumu + 
     labs(subtitle = "A: Individual model PDFS"), 
   p2_cumu + 
-    labs(subtitle = "B: Aggregate PDFs"), 
-  p3_cumu + 
-    labs(subtitle = "C: Relative performance of aggregates"), 
+    labs(subtitle = "B: Aggregate PDFs"),
   ncol = 1
 )
 
-ggsave("/Users/eah394/Documents/GitHub/aggregation_methods/figures/general_sir/pdfs_scores_cum.pdf", width = 12, height = 10 , units = "in")
+ggsave(paste0(fig_path,"pdfs_scores_cum.pdf"), width = 10, height = 7 , units = "in")
 ```
 
 
-### Figure 4
-
-```{r Fig4, echo = FALSE, fig.width=13, fig.height = 4}
-
+```{r Fig4, include = FALSE, fig.width=12, fig.height = 4}
 F4a = p1_peak + 
   geom_path(data = agg_pdfs %>% 
               filter(variable == "peak_cases") %>%
@@ -533,42 +809,39 @@ F4a = p1_peak +
   labs(subtitle = "A: Individual model and aggregate PDFs")+
   scale_color_manual(values = c(colrs_mod, colrs_agg), labels = c(ub_labs, "LOP", "Vincent")) 
   
-  
 
-F4b = diff_quant %>% 
-  filter(variable == "peak_cases", struc_uncert == "none", true_rho == "lik") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", 
-                                                  labs_struc_simp[1], 
-                                                  ifelse(struc_uncert == "btn", 
-                                                         labs_struc_simp[2], 
-                                                         labs_struc_simp[3])), 
-                                           levels = labs_struc_simp)) %>%
-  ggplot() +
-  geom_vline(aes(xintercept = 0), color = "grey") +
-  geom_text(data = data.frame(x = c(0.5,-0.5),
-                              y = c(0.5,0.5),
-                              lab = c("LOP performs better", "Vincent performs better"),
-                              hjust = c(0,1),
-                              obs_rho = 26),
-            aes(x = x, y = y, label = lab, hjust = hjust, color = lab), size = 1.8) +
-  geom_segment(aes(x = lower_25, y = plot_y, xend = upper_75, yend = plot_y), size = 1.5) +
-  geom_pointrange(aes(x = med, y = plot_y, xmin = lower, xmax = upper)) +
-  facet_grid(cols = vars(struc_uncert), rows =  vars(true_rho), switch = "y", 
-             labeller = labeller(true_rho = labs_rho, struc_uncert = label_parsed)) +
-  labs(x = "CRPS(Vincent) - CRPS(LOP)", subtitle = "B: Relative performance of aggregates") +
-  scale_color_manual(values = colrs_agg) +
-  scale_y_reverse(breaks = labs_m, labels = names(labs_m)) +
-  theme_bw()+
-  theme(axis.title.y = element_blank(),
-        legend.position = "none",
-        panel.grid = element_blank(),
-        strip.background = element_blank(),
-        strip.placement = "outside")
-
-plot_grid(plot_grid(F4a, F4b, nrow = 1, align = "vh", axis = "tb", rel_widths = c(0.7, 0.3)))
-ggsave("/Users/eah394/Documents/GitHub/aggregation_methods/figures/general_sir/pdfs_scores_peak.pdf", width = 13, height = 4 , units = "in")
+ggsave(paste0(fig_path,"pdfs_scores_peak.pdf"), width = 10, height = 3 , units = "in")
 ```
 
+```{r supp, include = FALSE}
+p2 <- plot_grid(crps_cum +
+            labs(subtitle = "B: Continuous rank probability score (CRPS)"), 
+          crps_diff_cum+
+            labs(subtitle = "C: Difference in CRPS"), 
+          ncol = 1)
+p2 <- plot_grid(fut_cum + 
+            labs(subtitle = "A: Synthetic future observations"), 
+          p2, nrow = 1, rel_widths = c(0.3,0.7))
+plot_grid(p2, 
+          p3_cumu + 
+            labs(subtitle = "D: Distribution of CRPS difference"), ncol = 1, rel_heights = c(0.6,0.4))
 
+ggsave(paste0(fig_path,"crps_diff_cum.pdf"), width = 15, height = 12 , units = "in")
+
+
+p2 <- plot_grid(crps_peak +
+            labs(subtitle = "B: Continuous rank probability score (CRPS)"), 
+          crps_diff_peak+
+            labs(subtitle = "C: Difference in CRPS"), 
+          ncol = 1)
+p2 <- plot_grid(fut_peak + 
+            labs(subtitle = "A: Synthetic future observations"), 
+          p2, nrow = 1, rel_widths = c(0.3,0.7))
+plot_grid(p2, 
+          p3_peak + 
+            labs(subtitle = "D: Distribution of CRPS difference"), ncol = 1, rel_heights = c(0.6,0.4))
+
+ggsave(paste0(fig_path,"crps_diff_peak.pdf"), width = 15, height = 12 , units = "in")
+```
 
 ## References
