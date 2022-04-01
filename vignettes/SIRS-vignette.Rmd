@@ -8,7 +8,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 ```{r setup, include = FALSE}
@@ -241,6 +241,9 @@ ggsave(paste0(fig_path, "param_distributions.pdf"),p_params, width = 12, height 
 ```
 
 ```{r plot-setup, include = FALSE}
+# defnie base text size
+bs <- 8
+
 # define facet labels
 labs_struc <- c("atop(Structural~uncertainty~bold(not~represented),all~models~assume~no~waning)", 
                "atop(Structural~uncertainty~bold(represented~between~models),A~and~C~asume~no~waning~B~and~D~assume~waning)", 
@@ -248,10 +251,10 @@ labs_struc <- c("atop(Structural~uncertainty~bold(not~represented),all~models~as
 names(labs_struc) <- c("none", "btn", "win")
 
 
-ub_labs <- list(bquote(A:mu[beta]==.(m1_beta)),
-                bquote(B:mu[beta]==.(m2_beta)),
-                bquote(C:mu[beta]==.(m3_beta)),
-                bquote(D:mu[beta]==.(m4_beta)))
+ub_labs <- list(bquote(mu[beta]==.(m1_beta)),
+                bquote(mu[beta]==.(m2_beta)),
+                bquote(mu[beta]==.(m3_beta)),
+                bquote(mu[beta]==.(m4_beta)))
 
   
 labs_struc_simp = c("Structural~uncertainty~bold(not~represented)",
@@ -259,6 +262,8 @@ labs_struc_simp = c("Structural~uncertainty~bold(not~represented)",
                     "Structural~uncertainty~bold(represented~within~models)")
 names(labs_struc_simp) = c("none", "btn", "win")
 
+labs_struc_super_simp <- c("not represented", "represented between models", "represented within models")
+names(labs_struc_super_simp) = c("none", "btn", "win")
 
 model_labs <- c(paste0("A:mu[beta]==",m1_beta,"~', '*rho==0"),
                 paste0("B:mu[beta]==",m2_beta,"~', '*rho==0"),
@@ -357,7 +362,7 @@ pdfs <- setDT(out$metrics)[,.(x = density(value, adjust = 2)$x, y = density(valu
 
 We plot the distribution of outcomes for individual model projections across the three uncertainty scenarios. 
 
-```{r plot-model-projections, fig.width=9, fig.height = 4, echo = FALSE}
+```{r plot-model-projections, fig.width=6, fig.height = 2.25, echo = FALSE}
 # reorder factor 
 pdfs$struc_uncert <- factor(pdfs$struc_uncert, levels = c("none", "btn", "win"))
 pdfs$variable <- factor(pdfs$variable, levels = c("cum_cases", "peak_cases"))
@@ -365,41 +370,24 @@ pdfs$variable <- factor(pdfs$variable, levels = c("cum_cases", "peak_cases"))
 # plot
 p1_cumu <- pdfs %>% 
   filter(variable == "cum_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc[1], ifelse(struc_uncert == "btn", labs_struc[2], labs_struc[3])), levels = labs_struc)) %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))) %>%
   ggplot(aes(x = x, y = y)) +
   geom_path(aes(color = as.factor(model)), size= 0.5) +
-  facet_grid(cols = vars(struc_uncert), labeller = label_parsed) +
-  coord_cartesian(xlim = c(0,2500), 
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  coord_cartesian(xlim = c(0,2000), 
                   ylim = range(pdfs %>% filter(variable == "cum_cases") %>% select(y)))+
-  scale_color_manual(values = colrs_mod,
+  scale_color_manual(values = rev(colrs_mod),
                      labels = ub_labs) +
-  scale_x_continuous(label = comma, name = "Cumulative cases") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme_bw() +
-  theme(axis.title.y = element_blank(),
-        legend.key.size = unit(0.3, "cm"),
+  scale_x_continuous(label = comma, 
+                     name = "cumulative cases") +
+  scale_y_continuous(expand = c(0,0),
+                     name = "individual predictions") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.size = unit(0.3, "cm"),
         legend.margin=margin(0,0,0,0),
-        legend.text = element_text(size = rel(0.6)),
-        legend.position = c(0.95,0.84),
-        legend.title = element_blank(),
-        panel.grid = element_blank(),
-        strip.background = element_blank())
-p1_peak <- pdfs %>% 
-  filter(variable == "peak_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
-  ggplot(aes(x = x, y = y)) +
-  geom_path(aes(color = as.factor(model)), size= 0.5) +
-  facet_grid(cols = vars(struc_uncert), labeller = label_parsed) +
-  scale_color_manual(values = colrs_mod,
-                     labels = ub_labs) +
-  scale_x_continuous(label = comma, name = "Peak cases") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme_bw() +
-  theme(axis.title.y = element_blank(),
-        legend.key.size = unit(0.3, "cm"),
-        legend.margin=margin(0,0,0,0),
-        legend.text = element_text(size = rel(0.6)),
-        legend.position = c(0.95,0.78),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.95,0.82),
         legend.title = element_blank(),
         panel.grid = element_blank(),
         strip.background = element_blank())
@@ -432,46 +420,33 @@ agg_pdfs <- agg_cdfs[, .(samps = approx(quantile, value, runif(50000))$y),
 
 We plot the resulting aggregate distributions. 
 
-```{r plot-aggs, fig.width=9, fig.height = 4, echo = FALSE}
+```{r plot-aggs, fig.width=6, fig.height = 2.25, echo = FALSE}
 # define aggregate colors
 colrs_agg = c("#377EB8", "#ff7f00")
 
 # plot
 p2_cumu <- agg_pdfs %>% 
   filter(variable == "cum_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_simp))) %>%
   ggplot(aes(x = x, y = y)) + 
-  geom_path(aes(color = method), size = 1.5, alpha = 0.8) +
-  facet_grid(cols = vars(struc_uncert), labeller = label_parsed) +
-  coord_cartesian(xlim = c(0,2500), 
-                  ylim = range(pdfs %>% filter(variable == "cum_cases") %>% select(y)))+
+  geom_path(aes(color = method), size = 1, alpha = 0.8) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  coord_cartesian(xlim = c(0,2000), 
+                  ylim = range(pdfs %>% 
+                                 filter(variable == "cum_cases") %>% 
+                                 select(y)))+
   scale_color_manual(values = colrs_agg) +
-  scale_x_continuous(label = comma, name = "Cumulative cases") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme_bw() +
-  theme(axis.title.y = element_blank(),
+  scale_x_continuous(label = comma, name = "cumulative cases") +
+  scale_y_continuous(expand = c(0,0), name = "aggregate predictions") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.height = unit(0.3, "cm"),
         legend.margin=margin(0,0,0,0),
-        legend.position = c(0.94,0.87),
+        legend.position = c(0.94,0.85),
+        legend.text = element_text(size = rel(0.7)),
         legend.title = element_blank(),
         panel.grid = element_blank(),
-        strip.background = element_blank()
-        ) #theme(strip.text = element_text(face = "bold"))
-p2_peak <- agg_pdfs %>% 
-  filter(variable == "peak_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
-  ggplot(aes(x = x, y = y)) + 
-  geom_path(aes(color = method), size = 1.5, alpha = 0.8) +
-  facet_grid(cols = vars(struc_uncert), labeller = labeller(struc_uncert = labs_struc_simp)) +
-  scale_color_manual(values = colrs_agg) +
-  scale_x_continuous(label = comma, name = "Peak cases") +
-  scale_y_continuous(expand = c(0,0)) +
-  theme_bw() +
-  theme(axis.title.y = element_blank(),
-        legend.position = "none",
-        legend.title = element_blank(),
-        panel.grid = element_blank(),
-        strip.background = element_blank(), 
-        strip.text = element_blank())
+        strip.background = element_blank())
 p2_cumu
 ```
 
@@ -783,34 +758,83 @@ p3_peak = scores_all %>%
 
 
 ```{r Fig3, include = FALSE, fig.width=12, fig.height = 10}
+struc_text_plot <- ggplot(data = data.frame(x = c(0,1),
+                           y = c(0,0))) + 
+    geom_line(aes(x = x, y = y), size = 0.25)+
+    geom_label(aes(x = 0.5, y = 0, label = "structural uncertainty"),
+              label.size = NA, size = bs/3)+
+    theme_nothing()
+
 plot_grid(
-  p1_cumu + 
-    labs(subtitle = "A: Individual model PDFS"), 
+ struc_text_plot,
+  p1_cumu +
+    geom_text(data = data.frame(x = rep(0,3),
+                              y = rep(0.013, 3),
+                              lab = c("(a)", "(b)", "(c)"),
+                              struc_uncert = factor(names(labs_struc_super_simp),
+                                                    levels = names(labs_struc_super_simp))),
+            aes(x = x, y = y, label = lab), vjust = 1, size = bs/3) +
+    theme(axis.text = element_blank(), 
+          axis.ticks.y = element_blank(), 
+          axis.title.x = element_blank(),
+          axis.title.y = element_text(size = bs)),
   p2_cumu + 
-    labs(subtitle = "B: Aggregate PDFs"),
-  ncol = 1
+    geom_text(data = data.frame(x = rep(0,3),
+                              y = rep(0.013, 3),
+                              lab = c("(d)", "(e)", "(f)"),
+                              struc_uncert = factor(names(labs_struc_super_simp),
+                                                    levels = names(labs_struc_super_simp))),
+            aes(x = x, y = y, label = lab), vjust = 1, size = bs/3) + 
+    theme(axis.text.y = element_blank(), 
+          axis.ticks.y = element_blank(), 
+          strip.text = element_blank()),
+  ncol = 1, rel_heights = c(0.05,0.45, 0.45), axis = "lr", align = "vh"
 )
 
-ggsave(paste0(fig_path,"pdfs_scores_cum.pdf"), width = 10, height = 7 , units = "in")
+ggsave(paste0(fig_path,"pdfs_scores_cum.pdf"), width = 6, height = 4 , units = "in")
 ```
 
 
 ```{r Fig4, include = FALSE, fig.width=12, fig.height = 4}
-F4a = p1_peak + 
+F4a = pdfs %>% 
+  filter(variable == "peak_cases") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))) %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_path(aes(color = as.factor(model)), size= 0.5) +
   geom_path(data = agg_pdfs %>% 
               filter(variable == "peak_cases") %>%
-              mutate(struc_uncert = factor(ifelse(struc_uncert == "none", 
-                                                  labs_struc_simp[1], 
-                                                  ifelse(struc_uncert == "btn", 
-                                                         labs_struc_simp[2], 
-                                                         labs_struc_simp[3])), 
-                                           levels = labs_struc_simp)), 
-            aes(color =  method), size = 1.5) +
-  labs(subtitle = "A: Individual model and aggregate PDFs")+
-  scale_color_manual(values = c(colrs_mod, colrs_agg), labels = c(ub_labs, "LOP", "Vincent")) 
+              mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))), 
+            aes(color =  method), size = 1) +
+  geom_text(data = data.frame(x = rep(-Inf,3),
+                              y = rep(Inf, 3),
+                              lab = c("(a)", "(b)", "(c)"),
+                              struc_uncert = factor(names(labs_struc_super_simp),
+                                                    levels = names(labs_struc_super_simp))),
+            aes(x = x, y = y, label = lab), hjust = 0, vjust = 1, size = bs/3) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  scale_color_manual(labels = c(ub_labs, "LOP", "vincent"), 
+                     values = c(rev(colrs_mod), colrs_agg)) +
+  scale_x_continuous(expand = c(0.005,0),
+                     label = comma, 
+                     name = "peak cases") +
+  scale_y_continuous(expand = c(0,0,0.05, 0), 
+                     name = "individual and aggregate predictions") +
+  theme_bw(base_size = 8) +
+  theme(axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.95,0.75),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank()) 
   
+plot_grid(struc_text_plot, F4a, 
+           ncol = 1, rel_heights = c(0.05,0.95), axis = "lr", align = "vh")
 
-ggsave(paste0(fig_path,"pdfs_scores_peak.pdf"), width = 10, height = 3 , units = "in")
+ggsave(paste0(fig_path,"pdfs_scores_peak.pdf"), width = 6, height = 2.2 , units = "in")
 ```
 
 ```{r supp, include = FALSE}
