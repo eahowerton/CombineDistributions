@@ -11,6 +11,24 @@ equal_weights <- function(data){
   return(data)
 }
 
+
+user_specified_weights <- function(data, weights){
+  weights <- check_weights_df(weights)
+  data <- data %>% left_join(weights)
+  return(data)
+}
+
+check_weights_df <- function(weights){
+  if(ncol(weights) != 2){
+    stop("weights not properly specified (ncol != 2)")}
+  if(!("weight" %in% colnames(weights))){
+    stop("weights not properly specified (weight col not included)")}
+  if(!("id" %in% colnames(weights))){
+    colnames(weights)[which(colnames(weights)!="weight")] = "id"
+  }
+  return(weights)
+}
+
 return_specified_quantiles <- function(data, ret_quantiles){
   data <- rm_duplicates(data)
   if(length(unique(data$value)) == 1){

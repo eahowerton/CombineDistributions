@@ -23,6 +23,34 @@ test_that("Test equal_weights()",{
   expect_equal(equal_weights(d), expected)
 })
 
+test_that("Test user_specified_weights()",{
+  d <- expand.grid(id = c("A","B"),
+                   quantile = seq(0,1,0.1))
+  d$value <- rnorm(nrow(d))
+  weights <- data.frame(id = c("A", "B"), weight = c(0,1))
+  expected <- d %>% mutate(id = as.character(id),
+                           weight = ifelse(id == "A", 0, 1))
+  expect_equal(user_specified_weights(d, weights), expected)
+})
+
+test_that("Test user_specified_weights()",{
+  d <- expand.grid(id = c("A","B"),
+                   quantile = seq(0,1,0.1))
+  d$value <- rnorm(nrow(d))
+  weights <- data.frame(m = c("A", "B"), weight = c(0,1))
+  expected <- d %>% mutate(id = as.character(id),
+                           weight = ifelse(id == "A", 0, 1))
+  expect_equal(user_specified_weights(d, weights), expected)
+})
+
+test_that("Test user_specified_weights()",{
+  d <- expand.grid(id = c("A","B"),
+                   quantile = seq(0,1,0.1))
+  d$value <- rnorm(nrow(d))
+  weights <- data.frame(m = c("A", "B"), weight = c(0,1), extra = 1)
+  expect_error(user_specified_weights(d, weights))
+})
+
 test_that("Test return_specified_quantiles",{
   d <- data.frame(value = seq(0,100,1))
   d$quantile <- d$value/100

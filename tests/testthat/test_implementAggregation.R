@@ -50,10 +50,11 @@ test_that("Test calculate_single_aggregate(): mean interior trim vinc",{
   quant <- seq(0,1,0.5)
   d <- expand.grid(model = c("A","B","C"),
                    quantile = quant)
-  d$value <- ifelse(d$model == "A", d$quantile * 2, ifelse(d$model == "B", d$quantile * 3, d$quantile * 4))
+  d$value <- ifelse(d$model == "A", d$quantile * 2, ifelse(d$model == "B", d$quantile * 3, d$quantile * 5))
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "vincent", ret_quantiles = quant, trim = "mean_interior", n_trim = 1)
-  expected <- data.frame(quantile = quant, value = quant * 3)
+                                     method = "vincent", ret_quantiles = quant,
+                                     weighting_scheme = "mean_interior", n_trim = 1)
+  expected <- data.frame(quantile = quant, value = quant * 3.5)
   expect_equal(test, expected)
 })
 
@@ -65,6 +66,22 @@ test_that("Test calculate_single_aggregate(): odd quantiles",{
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
                                      method = "vincent", ret_quantiles = c(0.1,0.33,0.7))
   expected <- data.frame(quantile = c(0.1,0.33,0.7), value = c(0.1,0.33,0.7) * 2)
+  expect_equal(test, expected)
+})
+
+test_that("Test calculate_single_aggregate(): user defined weights",{
+  quant <- seq(0,1,0.5)
+  d <- expand.grid(model = c("A","B"),
+                   quantile = quant)
+  d$value <- d$quantile *2
+  weights <- expand.grid(model = c("A","B"),
+                         weight = c(1,0))
+  test <- calculate_single_aggregate(d$quantile, d$value, d$model,
+                                     method = "vincent",
+                                     ret_quantiles = quant,
+                                     weighting_scheme = "user_defined",
+                                     weights = weights)
+  expected <- data.frame(d %>% filter(model == "A") %>% select(quantile, value))
   expect_equal(test, expected)
 })
 

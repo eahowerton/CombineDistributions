@@ -9,38 +9,52 @@
 #'   Specify cdf with \code{quantile} and \code{value} columns,
 #' @param id_var string containing the name of the column that identifies unique cdfs
 #' @param group_by vector containing the names of the columns to create unique aggregates for
-#' @param method character name of the method for aggregation. See details for methods.
-#' @param trim string to indicate trimming method (see Details)
+#' @param method character name of the method for aggregation (see details).
+#' @param weighting_scheme string to indicate how to weight in the aggregate (see details).
 #' @param n_trim integer denoting the number of models to trim
 #'
 #' @return TBD
 #' @export
 #'
-#' @details Methods include
+#' @details Methods include:
+#'
 #'   1. "LOP" - simple probability averaging, also called Linear Opinion Pool.
 #'   2. "vincent" - simple quantile averaging, also called Vincent average.
-#'   Trim inputs should be one of the following: "cdf_interior", "cdf_exterior",
-#'   "mean_interior", "mean_exterior", or "none" following REF.
-aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, trim = "none", n_trim = NA){
+#'
+#' Weighting schemes include:
+#'   1. "equal" - equal weighting of all models and values
+#'   2. "user_defined" - user supplies weights applied to each model
+#'   (additional input `weights` that is a data.frame containing `id` and `weight` columns)
+#'   3. trimming - "cdf_interior", "cdf_exterior",
+#'   "mean_interior", "mean_exterior", following REF (additional inputs ...)
+aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, weighting_scheme = "equal", ...){
   data <- update_id_var_col(data, id_var)
   data.table::setDT(data)
-  aggs <- data[,calculate_single_aggregate(quant = quantile, val = value, id = id,
-                                              method = method, ret_quantiles = ret_quantiles,
-                                           trim = trim, n_trim = n_trim),
+  aggs <- data[,calculate_single_aggregate(quant = quantile,
+                                           val = value,
+                                           id = id,
+                                           method = method,
+                                           ret_quantiles = ret_quantiles,
+                                           weighting_scheme = weighting_scheme,
+                                           ...),
                by = group_by]
   return(aggs)
 }
 
 #' export
-calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, trim = "none", n_trim = NA){
+calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, weighting_scheme = "equal", ...){
+  with(list(...),{
   data <- prep_input_data(quant, val, id)
   method_fn <- ifelse(method == "LOP", LOP, vincent)
   if(nrow(data) == 0){return(NA)}
-  if(trim == "none"){
+  if(weighting_scheme == "equal"){
     agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles)
   }
+  else if (weighting_scheme == "user_defined"){
+    agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, weight_fn = user_specified_weights, ...)
+  }
   else{
-    parse <- parse_trim_input(trim)
+    parse <- parse_trim_input(weighting_scheme)
     if(parse[1] == "cdf"){
       agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
     }
@@ -49,6 +63,7 @@ calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, tr
     }
   }
   return(data.frame(quantile = ret_quantiles, value = agg))
+  })
 }
 
 
