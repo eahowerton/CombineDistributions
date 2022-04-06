@@ -1,0 +1,596 @@
+---
+title: "Aggregation and trimming on real-world COVID-19 death predictions"
+bibliography: bibfile.bib
+output: 
+  rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Aggregating predictions from an SIRS model}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  warning = FALSE, 
+  message = FALSE,
+  fig.width = 4,
+  comment = "#>"
+)
+
+fig_path <- "/Users/eah394/Documents/GitHub/aggregation_methods/figures/MMODS_analysis/"
+```
+
+```{r setup-plot, echo = FALSE}
+# ploting specs
+colrs_agg = c("#377EB8", "#ff7f00")
+dot_size = 2
+thick_line_size = 0.7
+thin_line_size = 0.3
+
+# labels
+labs_intext <- c("Interior trimming\nnumber of models trimmed", "Exterior trimming\nnumber of models trimmed")
+names(labs_intext) = c("interior", "exterior")
+
+labs_metric <- c("Avg. CRPS", "Avg. Log Score", "Kullback-Leibler IC", "Coverage: 90%")
+names(labs_metric) = c("avg_crps", "avg_logS", "klic", "cov90")
+```
+
+This vignette implements the second case study from [@EAH-ms]. We use predictions from a real-time multi-model effort to evaluate the efficacy of stay-at-home interventions early in the COVID-19 pandemic (May-November 2020). SAY MORE ABOUT THE DATA? Details on the study and the data can be found in REF. 
+
+To start, we load a few packages.
+```{r preamble}
+# for aggregation
+library(CombineDistributions) 
+# for data manipulation
+library(readr)
+library(dplyr) 
+library(reshape2)
+library(tidyr)
+# for numerical integration
+library(pracma)
+# for speeding up aggregation calcs
+require(doParallel)
+require(foreach)
+registerDoParallel(4)
+# for plotting
+library(ggplot2)
+library(scales)
+library(cowplot)
+```
+
+
+First, we load the data (both individual model projections and observations). **These data are provided as in the package??**
+
+```{r load-proj}
+# individual projections
+projs <- read_csv("/Users/eah394/Documents/GitHub/aggregation_methods/data/mmods_data/team_submissions_incl_agg_round2_allquantiles.csv")
+# rm aggregate row -- for now
+projs <- projs %>%
+  filter(id != "aggregate", objective == "cumu_deaths", intervention == "closed")
+
+# observations
+obs <- read_csv("/Users/eah394/Documents/GitHub/aggregation_methods/data/mmods_data/county_deaths_closed_partial.csv") %>% 
+  dplyr::select(cumu_deaths, Population.x) %>% 
+  dplyr::mutate(obs_num = 1:n())
+
+
+```
+
+We can plot the individual projections, sorted by median cumulative death projection.
+
+```{r plot-ind-proj, echo = FALSE}
+p1 <- projs %>%
+  # filter to a few key quantiles and reformat the data.frame
+  filter(quantile %in% c(5,25,50,75,95)) %>%
+  mutate(quantile := paste0("Q", quantile)) %>%
+  reshape2::dcast(id ~ quantile, value.var = "value") %>%
+  # rank models by their median
+  mutate(rank_id = factor(rank(Q50, ties.method = "first"),
+                          levels = rev(seq(1:17)))) %>%
+  # plot individual projections
+  ggplot() +
+  geom_vline(data = data.frame(value = quantile(obs$cumu_deaths, 0.5),
+                               quant = 50), 
+             aes(xintercept = value,  color = "darkgrey"), size = 0.3)+
+  geom_rect(data = data.frame(xmin = quantile(obs$cumu_deaths, 0.05),
+                              xmax = quantile(obs$cumu_deaths, 0.95),
+                              ymin = -Inf, ymax = Inf), 
+            aes(xmin = xmin, xmax = xmax,  
+                ymin = ymin, ymax = ymax, 
+                fill ="darkgrey", alpha = 0.3))+
+  geom_segment(aes(x = Q5, xend = Q95, 
+                   y = rank_id, yend = rank_id, 
+                   color = "black"), 
+               size = thin_line_size)+
+  geom_segment(aes(x = Q25, xend = Q75, 
+                   y = rank_id, yend = rank_id, 
+                   color = "black"), 
+               size = thick_line_size)+
+  geom_point(aes(x = Q50, y = rank_id, 
+                 fill = "white", color = "black", alpha = 1), 
+             size = dot_size, shape = 124)+  
+  labs(x = "cumulative deaths") +
+  scale_alpha_identity(guide = "legend", breaks = c(0.3,1), 
+                       labels = c("observations", "individual model"), 
+                       name = "L") +
+  scale_color_identity(guide = "legend", 
+                       breaks = c("darkgrey", "black"), 
+                       labels = c("observations", "individual model"), 
+                       name = "L") +
+  scale_fill_identity(guide = "legend", breaks = c("darkgrey","white"), 
+                      labels = c("observations", "individual model"), 
+                      name = "L") +
+  scale_x_continuous(labels = comma) +
+  theme_bw(base_size = 8)+
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.75,0.85),
+        legend.title = element_blank(),
+        panel.grid = element_blank())
+p1
+```
+
+## Aggregating the projections
+
+We can aggregate the individual projections using either averaging approach (LOP vs. Vincent). We will try both frameworks with all trimming alternatives (interior vs. exterior CDF trimming).
+
+First, we define a `data.frame` with all possible aggregation methods to try.
+
+```{r}
+# define methods to test
+test_trim <- expand.grid(n_trim = c(NA,1:16), 
+                         method = c("LOP", "vincent"),
+                         int_ext = c("interior", "exterior"))
+test_trim$trim_type = paste("cdf", test_trim$int_ext, sep = "_")
+# filter out duplicates (only trim even exterior and odd interior)
+test_trim = test_trim %>% 
+  mutate(rm_flag = ifelse((int_ext == "interior" & n_trim %% 2 == 0) | 
+                          (int_ext == "exterior" & n_trim %% 2 == 1), 1, 0)) %>% 
+  filter(rm_flag == 0 | is.na(rm_flag)) %>% 
+  dplyr::select(-rm_flag)
+
+# run all possible combinations
+ret_quant <- seq(0,1, 0.01)
+aggs <- foreach(i=1:nrow(test_trim)) %dopar% {
+  aggregate_cdfs(projs %>% mutate(quantile = quantile/100),
+                 id_var = "id", 
+                 method = test_trim[i,"method"], 
+                 ret_quantiles = ret_quant,
+                 trim = ifelse(is.na(test_trim[i,"n_trim"]), "none", 
+                               as.character(test_trim[i,"trim_type"])), 
+                 n_trim = test_trim[i,"n_trim"])
+}
+aggs <- do.call(rbind, aggs)
+
+# create a column for each aggregation method specification
+aggs <- aggs %>%
+  mutate(id = sort(rep(1:nrow(test_trim),length(ret_quant)))) %>%
+  left_join(test_trim %>% mutate(id = 1:nrow(test_trim))) %>%
+  # change NA n_trim (mean) to 0
+   mutate(n_trim = ifelse(is.na(n_trim), 0, n_trim))
+```
+
+We can plot each of the aggregates.
+
+```{r, plot-aggs, echo = FALSE}
+aggs <- aggs %>% 
+  mutate(y_pos = n_trim + (n_trim %% 2) + ifelse(method == "LOP", 0.3, - 0.3))
+limts = range(aggs %>% 
+                filter(round(quantile,2) %in% c(0.05,0.95)) %>% 
+                pull(value))
+
+plot_MMODS_aggs <- function(agg_df, obs_df, 
+                            labs_intext, colrs_agg, 
+                            limts){
+p <- agg_df %>% 
+  filter(round(quantile,3) %in% c(0.05,0.25,0.5,0.75,0.95)) %>%
+  mutate(quantile = paste0("Q", quantile*100)) %>%
+  reshape2::dcast(n_trim + method + int_ext + trim_type + y_pos ~ quantile, value.var = "value") %>%
+  ggplot()+
+  geom_vline(data = data.frame(x = median(obs_df$cumu_deaths)),
+             aes(xintercept = x), color = "darkgrey", size = 0.3)+
+  geom_rect(data = data.frame(xmin = quantile(obs_df$cumu_deaths, 0.05),
+                              xmax = quantile(obs_df$cumu_deaths, 0.95),
+                              ymin = -Inf, ymax = Inf), 
+            aes(xmin = xmin, xmax = xmax,  ymin = ymin, ymax = ymax), fill ="darkgrey", alpha = 0.3)+
+  geom_linerange(aes(xmin = Q5,xmax = Q95, 
+                     y = y_pos, 
+                     color = as.factor(method), 
+                     group = as.factor(paste(n_trim, method))), 
+                 size = thin_line_size * 0.8)+
+  geom_linerange(aes(xmin = Q25,xmax = Q75, 
+                     y = y_pos,
+                     color = as.factor(method), 
+                     group = as.factor(paste(n_trim, method))), 
+                 size = thick_line_size * 0.8)+
+  geom_point(aes(x = Q50, y = y_pos, 
+                 color = as.factor(method), 
+                 group = as.factor(paste(n_trim, method)),
+                 fill = as.factor(method), 
+                 alpha = 1), size = dot_size * 0.8, shape = 124)+
+  facet_grid(rows = vars(int_ext), switch = "y", labeller = labeller(int_ext = labs_intext)) +
+  guides(linetype = "none") +
+  labs(x = "cumulative deaths") +
+  coord_cartesian(xlim = limts)+
+  scale_color_manual(values = colrs_agg) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(breaks = round(agg_df %>% pull(y_pos)) %>% unique(),
+                     labels = agg_df %>% pull(n_trim) %>% unique())+
+  theme_bw(base_size = 8)+
+  theme(legend.title = element_blank(),
+        panel.grid = element_blank(),
+        plot.margin=margin(b=0,unit="cm"),
+        strip.background = element_blank(),
+        strip.placement = "outside")
+}
+
+p2a = plot_MMODS_aggs(aggs %>% 
+                        filter( int_ext == "exterior"),
+                      obs, 
+                      labs_intext, 
+                      colrs_agg, 
+                      limts) + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title = element_blank(), 
+        legend.position = "none")
+
+p2b = plot_MMODS_aggs(aggs %>% 
+                        filter( int_ext == "interior"),
+                      obs, 
+                      labs_intext, 
+                      colrs_agg, 
+                      limts) +
+  theme(axis.title.y = element_blank(),
+        legend.position = "none")
+  
+  
+
+p2a_inset = aggs %>% 
+  filter(int_ext == "exterior") %>%
+  ggplot()+
+  geom_vline(data = data.frame(x = median(obs$cumu_deaths)),
+             aes(xintercept = x, color = "darkgrey"), size = 0.3)+
+  geom_rect(data = data.frame(xmin = quantile(obs$cumu_deaths, 0.05),
+                              xmax = quantile(obs$cumu_deaths, 0.95),
+                              ymin = -Inf, ymax = Inf), 
+            aes(xmin = xmin, xmax = xmax,  ymin = ymin, ymax = ymax, fill ="darkgrey", alpha = 0.3))+
+  geom_path(data = aggs %>% filter(int_ext == "exterior", round(quantile,2) %in% c(0.05,0.95)), 
+            aes(x = value, y = y_pos, color = as.factor(method), group = as.factor(paste(n_trim, method))), size = thin_line_size * 0.8)+
+  geom_path(data = aggs %>% filter(int_ext == "exterior", quantile %in% c(0.25,0.75)), 
+            aes(x = value, y = y_pos, color = as.factor(method), group = as.factor(paste(n_trim, method))), 
+            size = thick_line_size * 0.8)+
+  geom_point(data = aggs %>% filter(int_ext == "exterior", quantile == 0.50), 
+             aes(x = value, y = y_pos, color = as.factor(method), group = as.factor(paste(n_trim, method)),
+                 fill = as.factor(method), alpha = 1), size = dot_size * 0.8, shape = 124)+
+  scale_alpha_identity(breaks = c(0.3,1,1),
+                       guide = "legend",
+                       labels = c("observations", "LOP", "vincent"),
+                       name = "L") +
+  scale_color_manual(values = c("darkgrey", colrs_agg), 
+                     labels = c("observations", "LOP", "vincent"),
+                     name = "L") +
+  scale_fill_manual(values = c("darkgrey", "white", "white"), 
+                      guide = "legend",
+                      labels = c("observations", "LOP", "vincent"),
+                      name = "L") +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(breaks = aggs %>% filter(int_ext == "exterior") %>% pull(n_trim) %>% unique()) +
+  theme_bw(base_size = 8)+
+  theme(axis.title = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.position = c(0.7,0.8), 
+        legend.text = element_text(size = rel(0.7)),
+        legend.title = element_blank(),
+        panel.grid = element_blank())
+
+p2a <- p2a +annotation_custom(ggplotGrob(p2a_inset), 
+                            xmin = 500,xmax = Inf,ymin = 2, ymax =Inf)
+
+plot_grid(p2a,NULL, p2b, ncol = 1, align = "v", axis = "lr", rel_heights = c(0.5, -0.0001, 0.5))
+```
+
+## Evaluating the predictions
+
+Here we evaluate the performance of each aggregate distribution against the distribution of observed values.   
+
+Before evaluating performance, let's do a quick check on our observations. Although population size is restricted to 90,000-110,000 individuals, it is not constant for all counties. So, to make sure population size isn't confounding the observed number of cumulative deaths, we double check the correlation between the two.
+
+```{r obs-corr, echo = FALSE}
+obs %>%
+  ggplot(aes(x = Population.x, y = cumu_deaths)) +
+  geom_point() +
+  labs(x = "county population size", y = "observed cumulative deaths") +
+  scale_x_continuous(labels = comma) +
+  theme_bw(base_size = 8) +
+  theme(panel.grid = element_blank())
+ggsave(paste0(fig_path,"popvsobs.pdf"), width = 4, height = 4, units = "in")
+```
+
+To evaluate performance, we use four metrics: 
+
+1. **Log score**, defined as
+$$log Score=log⁡(f(x))f$$
+where $N$ is the number of observations, $f(i)$ is the predicted probability density function and $x$ is the observed value. Lower scores indicate better performance.
+
+2. 	**Continuous rank probability score (CRPS)**, defined as  
+$$CRPS(F,x)= \int_{-\infty}^\infty (F(y)-1\{y≥x\})^2 dy = \int_{-\infty}^xF(y)^2 dy+ \int_x^{\infty}(F(y)-1)^2 dy$$
+where $1\{y≥x\}=1$ if $y≥x$ and 0 otherwise. Distributions with the lowest CRPS values will be both calibrated (i.e., the observed value will fall in the center of the distribution) and sharp (i.e., concentrated around the observed value). Because the distributions being evaluated are defined empirically (rather than by a particular functional form), analytical evaluation of the CRPS is not possible. Instead, we approximate CRPS using
+$$CRPS(F,x)= E_F |X-x|-\frac{1}{2} E_F |X-X'|$$
+where $E_F |X|$  represents the expectation of the absolute value of $X$ with $X ~ F(U1)$ and $X' ~ F(U2)$ for $U1, U2 \sim Uniform(0,1)$. We use 1,000 random uniform draws for each CRPS approximation. 
+
+3. 	**90% interval coverage** is defined as
+$$Coverage: 90\% = \frac{|C_{90} |}{N} \text{ }  for \text{ } C_{90}= {x∶F^{-1} (0.05)≤x ≤ F^{-1}(0.95)}$$
+where $x$ is the observed value and $F^{-1}$ is the predicted quantile function. We denote the cardinality (i.e., size) of some set, $A$, with $|A|$.
+
+4. **Kullback-Leibler information criterion (KLIC)** is defined as
+
+$$KLIC = \int_{-\infty}^\infty  [log(o(y)) - log(f(y))]o(y) dy$$
+where $o(y)$ is the probability distribution of observations and $f(y)$ is the predicted probability density function. We approximate this integral numerically using the trapezoid rule. If distributions are not defined for a particular observation, we assume the values of $o$ or $f$ are very close to 0, specifically $o(y)=10^{-5}$ and $f(y)=10^{-5}$.
+
+More details on each score can be found in Electronic Supplementary Material 1.4 of [@EAH-ms].
+
+Here, we define a function to implement each of these metrics. 
+
+```{r func}
+CRPS <- function(q,v,o,size=1000, rule=2, ties="ordered") {
+  set.seed(101) # set seed so using same uniform draws each time
+  x = approx(q,v,runif(size),rule=rule, ties=ties)
+  return(mean(abs(x$y-o[1])) - 
+           1/2*mean(abs(x$y-approx(q,v,runif(size),rule=rule, ties=ties)$y)))
+}
+
+log_score <- function(dens_x,dens_y,o,rule=2, ties="ordered"){
+  #approx_pdf <- density(approx(q, v, runif(size))$y)
+  return(-log(approx(dens_x, dens_y, o[1], rule = rule, ties = ties)$y))
+}
+
+KLIC <- function(dens_x, dens_y, obs, zer = 1E-5){
+  obs_dist <- density(obs)
+  rng <- seq(0, max(obs_dist$x, dens_x),1)
+  obs_dist <- approx(obs_dist$x, obs_dist$y, rng, yleft = zer, yright = zer)
+  tst_dist <- approx(dens_x, dens_y, rng, yleft = zer, yright = zer)
+  return(trapz(log(obs_dist$y/tst_dist$y) * obs_dist$y)) 
+}
+
+cov <- function(q, v, obs, cov_level){
+  lwr <- v[abs(q - (1-cov_level)/2)<0.0001]
+  upr <- v[abs(q - (1- ((1-cov_level)/2))) < 0.0001]
+  return(length(which(obs < upr & obs >= lwr))/length(obs))
+}
+```
+
+Now, apply each function to all aggregate distributions.
+```{r calc-scores}
+# merge the aggregates and observations
+scores_CRPS <- crossing(aggs,obs %>% dplyr::select(cumu_deaths) %>% 
+                          mutate(obs_num = 1:nrow(obs)))
+# set as data.table
+setDT(scores_CRPS)
+# get CRPS score
+scores_CRPS <- scores_CRPS[, .(CRPS = CRPS(quantile,value,cumu_deaths)), 
+                   by=.(method, n_trim, int_ext, obs_num, cumu_deaths)]
+
+# get log score
+n_samp = 10000
+pdfs <- setDT(aggs)[, .(samp = approx(quantile, value, runif(n_samp))$y), 
+             by = .(method, n_trim, int_ext)]
+pdfs <- pdfs[, .(dens_x = density(samp)$x, 
+                 dens_y = density(samp)$y), 
+             by = .(method, n_trim, int_ext)]
+scores_log <- crossing(pdfs, obs %>% dplyr::select(cumu_deaths) %>% mutate(obs_num = 1:nrow(obs)))
+scores_log <- setDT(scores_log)[, .(logS = log_score(dens_x, dens_y, cumu_deaths)), 
+                   by = .(method, n_trim, int_ext, obs_num, cumu_deaths)]
+
+# kullback-leibler
+scores_klic <- pdfs[, .(klic = KLIC(dens_x, dens_y, obs$cumu_deaths)),
+                    by = .(method, n_trim, int_ext)]
+  
+# coverage
+scores_cov <- aggs[, .(cov90 = cov(quantile, value, obs$cumu_deaths, 0.9)), 
+                   by = .(method, n_trim, int_ext)]
+
+# create one df for all scores
+scores <- merge(scores_CRPS, scores_log)
+scores <- scores[, .(avg_crps = mean(CRPS), 
+                     avg_logS = mean(logS)), 
+                 by = .(method, n_trim, int_ext)]
+scores <- merge(scores, scores_klic)
+scores <- merge(scores, scores_cov)
+
+```
+
+Now we can plot the outcomes of this performance analysis.
+
+```{r plot-scores, echo = FALSE}
+
+p3 <- reshape2::melt(scores, c("method", "n_trim", "int_ext"), 
+                         value.name = "score", variable.name = "metric") %>%
+  mutate(score_fill= ifelse(metric == "cov90", 1-abs(score - 0.9), -score)) %>%
+  group_by(metric) %>%
+  mutate(rank_score = rank(score_fill)/n(), 
+         best_score = max(score_fill), 
+         best_flag = ifelse(score_fill == best_score, 1, 0), 
+         lab = ifelse(metric == "avg_crps", 
+                      as.character(round(score,1)), 
+                      as.character(round(score,2))), 
+         metric = factor(metric, levels = c( "avg_logS","cov90", "avg_crps", "klic")),
+         int_ext = factor(int_ext, levels = c("exterior", "interior"))) %>%
+  ggplot(aes(x = metric, y = as.factor(n_trim), fill = rank_score))+
+  geom_tile() +
+  geom_text(aes(label = lab, color = as.factor(best_flag)), size = 1.7) +
+  facet_grid(cols = vars(method), rows = vars(int_ext), scales = "free", switch = "y", labeller = labeller(int_ext = labs_intext))+
+  coord_cartesian(expand = FALSE, clip = "off")+
+  guides(color = "none")+
+  scale_color_manual(values = c("black","red"))+
+  scale_fill_distiller(palette = "YlGnBu", 
+                       breaks = c(0,1), 
+                       labels = c("worst score", "best score"), 
+                       limits = c(0,1)) +
+  scale_x_discrete(labels = labs_metric)+
+  theme_bw(base_size = 8)+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.key.width = unit(1, "cm"),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.45),
+        panel.spacing = unit(0, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside")
+p3
+```
+
+```{r supp, include = FALSE}
+plot_grid(plot_grid(p2a + labs(subtitle = "A: Trimmed aggregate distributions"),NULL, p2b, 
+                    ncol = 1, align = "v", axis = "lr", rel_heights = c(0.5, -0.0001, 0.5)), 
+          NULL, 
+          p3 + labs(subtitle = "B: Aggregate performance"), 
+          rel_widths = c(0.4,0.02,0.6), nrow = 1)
+ggsave(paste0(fig_path,"performance_all_trimming.pdf"), width = 6, height = 4 , units = "in")
+```
+
+```{r plot-main-fig, include = FALSE}
+p2a = plot_MMODS_aggs(aggs %>% 
+                        filter(int_ext == "exterior",
+                               n_trim %in% c(0,3,4,7,8,11,12,15,16)) %>% 
+                        mutate(y_pos = y_pos - n_trim/2),
+                      obs, 
+                      labs_intext, 
+                      colrs_agg, 
+                      limts) + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title = element_blank(), 
+        legend.position = "none")
+
+p2b = plot_MMODS_aggs(aggs %>% 
+                        filter( int_ext == "interior",
+                               n_trim %in% c(0,3,4,7,8,11,12,15,16)) %>% 
+                        mutate(y_pos = y_pos - ifelse(n_trim == 0, 0, n_trim+1)/2),
+                      obs, 
+                      labs_intext, 
+                      colrs_agg, 
+                      limts) +
+  theme(axis.title.y = element_blank(),
+        legend.position = "none")
+  
+
+p2a_inset = aggs %>% 
+  filter(int_ext == "exterior",
+         n_trim %in% c(0,3,4,7,8,11,12,15,16), 
+         round(quantile,3) %in% c(0.05,0.25,0.5,0.75,0.95)) %>%
+  mutate(quantile = paste0("Q", quantile*100),
+         y_pos = y_pos - n_trim/2) %>%
+  reshape2::dcast(n_trim + method + int_ext + trim_type + y_pos ~ quantile, value.var = "value") %>%
+  ggplot()+
+  geom_vline(data = data.frame(x = median(obs$cumu_deaths)),
+             aes(xintercept = x, color = "darkgrey"), size = 0.3)+
+  geom_rect(data = data.frame(xmin = quantile(obs$cumu_deaths, 0.05),
+                              xmax = quantile(obs$cumu_deaths, 0.95),
+                              ymin = -Inf, ymax = Inf), 
+            aes(xmin = xmin, xmax = xmax,  ymin = ymin, ymax = ymax, fill ="darkgrey", alpha = 0.3))+
+  geom_linerange(aes(xmin = Q5,
+                     xmax = Q95, 
+                     y = y_pos, 
+                     color = as.factor(method), 
+                     group = as.factor(paste(n_trim, method))), 
+                 size = thin_line_size * 0.8)+
+  geom_linerange(aes(xmin = Q25,
+                     xmax = Q75, 
+                     y = y_pos,
+                     color = as.factor(method), 
+                     group = as.factor(paste(n_trim, method))), 
+                 size = thick_line_size * 0.8)+
+  geom_point(aes(x = Q50, 
+                 y = y_pos, 
+                 color = as.factor(method), 
+                 group = as.factor(paste(n_trim, method)),
+                 fill = as.factor(method), 
+                 alpha = 1), size = dot_size * 0.8, shape = 124)+
+  scale_alpha_identity(breaks = c(0.3,1,1),
+                       guide = "legend",
+                       labels = c("observations", "LOP", "vincent"),
+                       name = "L") +
+  scale_color_manual(values = c("darkgrey", colrs_agg), 
+                     labels = c("observations", "LOP", "vincent"),
+                     name = "L") +
+  scale_fill_manual(values = c("darkgrey", "white", "white"), 
+                      guide = "legend",
+                      labels = c("observations", "LOP", "vincent"),
+                      name = "L") +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(breaks = (aggs %>% 
+                                 filter(int_ext == "exterior", n_trim %in% c(0,3,4,7,8,11,12,15,16))%>% 
+                                 pull(n_trim) 
+                               %>% unique())/2,
+                     labels = aggs %>% 
+                       filter(int_ext == "exterior", n_trim %in% c(0,3,4,7,8,11,12,15,16)) %>% 
+                       pull(n_trim) %>% 
+                       unique()) +
+  theme_bw(base_size = 8)+
+  theme(axis.title = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.position = c(0.7,0.7), 
+        legend.text = element_text(size = rel(0.7)),
+        legend.title = element_blank(),
+        panel.grid = element_blank())
+
+p2a <- p2a +annotation_custom(ggplotGrob(p2a_inset), 
+                            xmin = 500,xmax = Inf,ymin = 1, ymax =Inf)
+
+p3 <- reshape2::melt(scores, c("method", "n_trim", "int_ext"), 
+                         value.name = "score", variable.name = "metric") %>%
+  filter(n_trim %in% c(0,3,4,7,8,11,12,15,16)) %>%
+  mutate(score_fill= ifelse(metric == "cov90", 1-abs(score - 0.9), -score)) %>%
+  group_by(metric) %>%
+  mutate(rank_score = rank(score_fill)/n(), 
+         best_score = max(score_fill), 
+         best_flag = ifelse(score_fill == best_score, 1, 0), 
+         lab = ifelse(metric == "avg_crps", 
+                      as.character(round(score,1)), 
+                      as.character(round(score,2))), 
+         metric = factor(metric, levels = c( "avg_logS","cov90", "avg_crps", "klic")),
+         int_ext = factor(int_ext, levels = c("exterior", "interior"))) %>%
+  ggplot(aes(x = metric, y = as.factor(n_trim), fill = rank_score))+
+  geom_tile() +
+  geom_text(aes(label = lab, color = as.factor(best_flag)), size = 2) +
+  facet_grid(cols = vars(method), rows = vars(int_ext), scales = "free", switch = "y", labeller = labeller(int_ext = labs_intext))+
+  coord_cartesian(expand = FALSE, clip = "off")+
+  guides(color = "none")+
+  scale_color_manual(values = c("black","red"))+
+  scale_fill_distiller(palette = "YlGnBu", 
+                       breaks = c(0,1), 
+                       labels = c("worst score", "best score"), 
+                       limits = c(0,1)) +
+  scale_x_discrete(labels = labs_metric)+
+  theme_bw(base_size = 8)+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.key.width = unit(0.8, "cm"),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.45),
+        panel.spacing = unit(0, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside")
+
+plot_grid(plot_grid(p1, 
+                    p2a,
+                    NULL, 
+                    p2b, 
+                    ncol = 1, align = "v", axis = "lr", rel_heights = c(0.4,0.3, -0.0001, 0.3)), NULL, p3, rel_widths = c(0.4,0.02,0.6), nrow = 1)
+ggsave(paste0(fig_path,"performance_trimming.pdf"), width = 6, height = 4.3, units = "in")
+```
+
+
+## References
