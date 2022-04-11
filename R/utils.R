@@ -14,7 +14,7 @@ equal_weights <- function(data){
 
 user_specified_weights <- function(data, weights){
   weights <- check_weights_df(weights)
-  data <- data %>% left_join(weights)
+  data <- data %>% left_join(weights, by = "id")
   return(data)
 }
 
