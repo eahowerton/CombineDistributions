@@ -407,7 +407,7 @@ agg_cdfs <- rbind(
   aggregate_cdfs(cdfs, id_var = "model", 
                  group_by = c("struc_uncert", "variable"),
                  method = "vincent", 
-                 ret_quantiles = q)[,method := "vincent"]
+                 ret_quantiles = q)[,method := "Vincent"]
   )
   
 # to get aggregate pdfs, sample from std. uniform and draw from distributions
@@ -554,7 +554,7 @@ fut_peak <- obs %>%
 ```
 
 
-We use the continuous rank probability score (CRPS) to assess performance of the aggregate distributions against these synthetic future observations.
+We use the continuous rank probability score (CRPS) [@matheson_scoring_1976-1] to assess performance of the aggregate distributions against these synthetic future observations.
 
 ```{r crps}
 # define function to implement CRPS 
@@ -620,19 +620,19 @@ And we can show when LOP and Vincent perform better by plotting the difference b
 crps_diff_cum <- scores %>%
   filter(variable == "cum_cases") %>%
   reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
-  mutate(diff = vincent - LOP) %>%
+  mutate(diff = Vincent - LOP) %>%
   mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
   ggplot(aes(x = obs, y = diff)) + 
   geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
   geom_line() +
   geom_text(data = data.frame(x = c(0, 0 ),
                               y  = c(50,-50), 
-                              lab = c("LOP performs better", "vincent performs better"), 
+                              lab = c("LOP performs better", "Vincent performs better"), 
                               struc_uncert = rep(labs_struc_simp[1], 2)), 
             aes(x = x, y = y, label = lab, color = lab), angle = 90, size = 3, vjust = 0) +
   facet_grid(cols = vars(struc_uncert), 
              labeller = label_parsed) +
-  labs(x = "observed cumulative cases", y = "CRPS(vincent) - CRPS(LOP)") +
+  labs(x = "observed cumulative cases", y = "CRPS(Vincent) - CRPS(LOP)") +
   scale_color_manual(values = colrs_agg) + 
   scale_x_continuous(labels = comma) +
   theme_bw() + 
@@ -644,19 +644,19 @@ crps_diff_cum
 crps_diff_peak <- scores %>%
   filter(variable == "peak_cases") %>%
   reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
-  mutate(diff = vincent - LOP) %>%
+  mutate(diff = Vincent - LOP) %>%
   mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
   ggplot(aes(x = obs, y = diff)) + 
   geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
   geom_line() +
   geom_text(data = data.frame(x = c(0, 0 ),
                               y  = c(50,-50), 
-                              lab = c("LOP performs better", "vincent performs better"), 
+                              lab = c("LOP performs better", "Vincent performs better"), 
                               struc_uncert = rep(labs_struc_simp[1], 2)), 
             aes(x = x, y = y, label = lab, color = lab), angle = 90, size = 3, vjust = 0) +
   facet_grid(cols = vars(struc_uncert), 
              labeller = label_parsed) +
-  labs(x = "observed peak cases", y = "CRPS(vincent) - CRPS(LOP)") +
+  labs(x = "observed peak cases", y = "CRPS(Vincent) - CRPS(LOP)") +
   scale_color_manual(values = colrs_agg) + 
   scale_x_continuous(labels = comma) +
   theme_bw() + 
@@ -674,7 +674,7 @@ scores_all <- obs %>%
   reshape2::dcast(variable + true_beta + true_rho + struc_uncert + 
                     value + sim ~ method, value.var = "CRPS") %>%
   # calculate difference to see which method has better CRPS
-  mutate(diff = vincent - LOP) %>%
+  mutate(diff = Vincent - LOP) %>%
   # summarize distribution of differences
   group_by(variable, true_beta, true_rho, struc_uncert) %>%
   mutate(lower = quantile(diff, 0.025),
@@ -756,7 +756,6 @@ p3_peak = scores_all %>%
         strip.placement = "outside")
 ```
 
-
 ```{r Fig3, include = FALSE, fig.width=12, fig.height = 10}
 struc_text_plot <- ggplot(data = data.frame(x = c(0,1),
                            y = c(0,0))) + 
@@ -813,7 +812,7 @@ F4a = pdfs %>%
             aes(x = x, y = y, label = lab), hjust = 0, vjust = 1, size = bs/3) +
   facet_grid(cols = vars(struc_uncert), 
              labeller = labeller(struc_uncert = labs_struc_super_simp)) +
-  scale_color_manual(labels = c(ub_labs, "LOP", "vincent"), 
+  scale_color_manual(labels = c(ub_labs, "LOP", "Vincent"), 
                      values = c(rev(colrs_mod), colrs_agg)) +
   scale_x_continuous(expand = c(0.005,0),
                      label = comma, 
