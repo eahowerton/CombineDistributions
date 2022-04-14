@@ -163,7 +163,7 @@ aggs <- foreach(i=1:nrow(test_trim)) %dopar% {
                  id_var = "id", 
                  method = test_trim[i,"method"], 
                  ret_quantiles = ret_quant,
-                 trim = ifelse(is.na(test_trim[i,"n_trim"]), "none", 
+                 weighting_scheme = ifelse(is.na(test_trim[i,"n_trim"]), "equal", 
                                as.character(test_trim[i,"trim_type"])), 
                  n_trim = test_trim[i,"n_trim"])
 }
@@ -592,5 +592,30 @@ plot_grid(plot_grid(p1,
 ggsave(paste0(fig_path,"performance_trimming.pdf"), width = 6, height = 4.3, units = "in")
 ```
 
+```{r ms-vals}
+aggs_main_text <- aggs %>% filter(n_trim %in% c(0,3,4,7,8,11,12,15,16))
+### Values for text ####
+ms_vals <- list(
+  ind_mod = list(
+    min_median = min(projs %>% filter(quantile == 50) %>% pull(value)),
+    max_median = max(projs %>% filter(quantile == 50) %>% pull(value)),
+    min_90_PI = min(projs %>% group_by(id) %>% summarise(range = value[quantile == 95] - value[quantile == 5])  %>% pull(range)),
+    max_90_PI = max(projs %>% group_by(id) %>% summarise(range = value[quantile == 95] - value[quantile == 5])  %>% pull(range))
+  ),
+  aggs = list(
+    min_Q95_LOP = min(aggs_main_text %>% filter(round(quantile,2) == 0.95, method == "LOP") %>% pull(value)),
+    max_Q95_LOP = max(aggs_main_text %>% filter(round(quantile,2) == 0.95, method == "LOP") %>% pull(value)),
+    min_Q95_vin = min(aggs_main_text %>% filter(round(quantile,2) == 0.95, method == "vincent") %>% pull(value)),
+    max_Q95_vin = max(aggs_main_text %>% filter(round(quantile,2) == 0.95, method == "vincent") %>% pull(value)),
+    exceed_250_LOP_untrim = round(1-with(aggs_main_text %>% filter(method == "LOP", n_trim == 0, int_ext == "exterior"), 
+                                   approx(value, quantile, 250)$y), 3),
+    exceed_250_vin_untrim = round(1-with(aggs_main_text %>% filter(method == "vincent", n_trim == 0, int_ext == "exterior"), 
+                                   approx(value, quantile, 250)$y),3),
+    exceed_250_LOP_untrim = round(1-with(aggs_main_text %>% filter(method == "LOP", n_trim == 16, int_ext == "exterior"), 
+                                   approx(value, quantile, 250)$y),3)
+  )
+)
+unlist(ms_vals)
+```
 
 ## References

@@ -867,4 +867,41 @@ plot_grid(p2,
 ggsave(paste0(fig_path,"crps_diff_peak.pdf"), width = 15, height = 12 , units = "in")
 ```
 
+
+```{r values-for-text, echo = FALSE}
+# percent of cumu case observations where LOP performs better
+# structural uncertainty = btn only
+obs %>%
+  left_join(scores, by = c("variable", "value" = "obs")) %>%
+  reshape2::dcast(variable + true_beta + true_rho + struc_uncert + 
+                    value + sim ~ method, value.var = "CRPS") %>%
+  mutate(LOP_better_flag = ifelse(LOP > Vincent, 0, 1)) %>%
+  filter(variable == "cum_cases", struc_uncert == "btn") %>%
+  summarise(pct_LOP = sum(LOP_better_flag)/n(), 
+            pct_Vin = 1-pct_LOP)
+
+
+# percent of peak case observations where vincent performs better
+obs %>%
+  left_join(scores, by = c("variable", "value" = "obs")) %>%
+  reshape2::dcast(variable + true_beta + true_rho + struc_uncert + 
+                    value + sim ~ method, value.var = "CRPS") %>%
+  mutate(LOP_better_flag = ifelse(LOP > Vincent, 0, 1)) %>%
+  filter(variable == "peak_cases") %>%
+  summarise(pct_LOP = sum(LOP_better_flag)/n(), 
+            pct_Vin = 1-pct_LOP)
+
+# percent of peak case observations where vincent performs better 
+# true transmission = model mean only
+obs %>%
+  left_join(scores, by = c("variable", "value" = "obs")) %>%
+  reshape2::dcast(variable + true_beta + true_rho + struc_uncert + 
+                    value + sim ~ method, value.var = "CRPS") %>%
+  mutate(LOP_better_flag = ifelse(LOP > Vincent, 0, 1)) %>%
+  filter(variable == "peak_cases", true_beta == "mean") %>%
+  summarise(pct_LOP = sum(LOP_better_flag)/n(), 
+            pct_Vin = 1-pct_LOP)
+
+```
+
 ## References
