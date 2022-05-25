@@ -10,8 +10,8 @@ calculate_single_aggregate(
   id,
   method,
   ret_quantiles,
-  trim = "none",
-  n_trim = NA
+  weighting_scheme = "equal",
+  ...
 )
 }
 \description{

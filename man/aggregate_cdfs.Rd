@@ -10,8 +10,8 @@ aggregate_cdfs(
   group_by,
   method,
   ret_quantiles,
-  trim = "none",
-  n_trim = NA
+  weighting_scheme = "equal",
+  ...
 )
 }
 \arguments{
@@ -22,9 +22,9 @@ Specify cdf with \code{quantile} and \code{value} columns,}
 
 \item{group_by}{vector containing the names of the columns to create unique aggregates for}
 
-\item{method}{character name of the method for aggregation. See details for methods.}
+\item{method}{character name of the method for aggregation (see details).}
 
-\item{trim}{string to indicate trimming method (see Details)}
+\item{weighting_scheme}{string to indicate how to weight in the aggregate (see details).}
 
 \item{n_trim}{integer denoting the number of models to trim}
 }
@@ -36,11 +36,18 @@ Given a data.frame containing cdfs , return a single aggregate
 cdf using specified method.
 }
 \details{
-Methods include
+Methods include:
 \enumerate{
 \item "LOP" - simple probability averaging, also called Linear Opinion Pool.
 \item "vincent" - simple quantile averaging, also called Vincent average.
-Trim inputs should be one of the following: "cdf_interior", "cdf_exterior",
-"mean_interior", "mean_exterior", or "none" following REF.
+}
+
+Weighting schemes include:
+\enumerate{
+\item "equal" - equal weighting of all models and values
+\item "user_defined" - user supplies weights applied to each model
+(additional input \code{weights} that is a data.frame containing \code{id} and \code{weight} columns)
+\item trimming - "cdf_interior", "cdf_exterior",
+"mean_interior", "mean_exterior", following REF (additional inputs ...)
 }
 }
