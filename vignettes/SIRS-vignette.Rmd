@@ -382,7 +382,7 @@ p1_cumu <- pdfs %>%
   scale_x_continuous(label = comma, 
                      name = "cumulative cases") +
   scale_y_continuous(expand = c(0,0),
-                     name = "individual predictions") +
+                     name = "individual predictions\n(probability density function)") +
   theme_bw(base_size = bs) +
   theme(legend.key.size = unit(0.3, "cm"),
         legend.margin=margin(0,0,0,0),
@@ -438,7 +438,7 @@ p2_cumu <- agg_pdfs %>%
                                  select(y)))+
   scale_color_manual(values = colrs_agg) +
   scale_x_continuous(label = comma, name = "cumulative cases") +
-  scale_y_continuous(expand = c(0,0), name = "aggregate predictions") +
+  scale_y_continuous(expand = c(0,0), name = "aggregate predictions\n(probability density function)") +
   theme_bw(base_size = bs) +
   theme(legend.key.height = unit(0.3, "cm"),
         legend.margin=margin(0,0,0,0),
@@ -818,7 +818,7 @@ F4a = pdfs %>%
                      label = comma, 
                      name = "peak cases") +
   scale_y_continuous(expand = c(0,0,0.05, 0), 
-                     name = "individual and aggregate predictions") +
+                     name = "individual and aggregate predictions\n(probability density function)") +
   theme_bw(base_size = 8) +
   theme(axis.text.y = element_blank(), 
         axis.ticks.y = element_blank(),

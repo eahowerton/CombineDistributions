@@ -38,7 +38,7 @@ labs_metric <- c("Avg. CRPS", "Avg. Log Score", "Kullback-Leibler IC", "Coverage
 names(labs_metric) = c("avg_crps", "avg_logS", "klic", "cov90")
 ```
 
-This vignette implements the second case study from [@EAH-ms]. We use predictions from a real-time multi-model effort to evaluate the efficacy of stay-at-home interventions early in the COVID-19 pandemic (May-November 2020). SAY MORE ABOUT THE DATA? Details on the study and the data can be found in REF. 
+This vignette implements the second case study from [@EAH-ms]. We use predictions from a real-time multi-model effort to evaluate the efficacy of a stay-at-home intervention in a US county of approximately 100,000 individuals early in the COVID-19 pandemic (May-November 2020). In addition to predictions of cumulative deaths from 17 distinct models, we also retrospectively collected observed cumulative deaths over the same period in comparable US counties that implemented a stay-at-home order for the duration of the projection period.  Details on the study can be found in [@shea_covid-19_2020], and raw data is available at https://github.com/MMODS-org/Elicitation-1. 
 
 To start, we load a few packages.
 ```{r preamble}
@@ -62,41 +62,38 @@ library(cowplot)
 ```
 
 
-First, we load the data (both individual model projections and observations). **These data are provided as in the package??**
+First, we load the data (both individual model projections and post-hoc observations). These data are provided in the package.
 
 ```{r load-proj}
 # individual projections
-projs <- read_csv("/Users/eah394/Documents/GitHub/aggregation_methods/data/mmods_data/team_submissions_incl_agg_round2_allquantiles.csv")
-# rm aggregate row -- for now
-projs <- projs %>%
-  filter(id != "aggregate", objective == "cumu_deaths", intervention == "closed")
+data(MMODS)
 
 # observations
-obs <- read_csv("/Users/eah394/Documents/GitHub/aggregation_methods/data/mmods_data/county_deaths_closed_partial.csv") %>% 
-  dplyr::select(cumu_deaths, Population.x) %>% 
-  dplyr::mutate(obs_num = 1:n())
+data(MMODS_obs)
 
-
+MMODS_obs <- MMODS_obs %>%
+  select(Population, cumu_deaths) %>%
+  mutate(obs_num = 1:n())
 ```
 
 We can plot the individual projections, sorted by median cumulative death projection.
 
 ```{r plot-ind-proj, echo = FALSE}
-p1 <- projs %>%
+p1 <- MMODS %>%
   # filter to a few key quantiles and reformat the data.frame
-  filter(quantile %in% c(5,25,50,75,95)) %>%
-  mutate(quantile := paste0("Q", quantile)) %>%
+  filter(quantile %in% c(0.05,0.25,0.50,0.75,0.95)) %>%
+  mutate(quantile := paste0("Q", quantile*100)) %>%
   reshape2::dcast(id ~ quantile, value.var = "value") %>%
   # rank models by their median
   mutate(rank_id = factor(rank(Q50, ties.method = "first"),
                           levels = rev(seq(1:17)))) %>%
   # plot individual projections
   ggplot() +
-  geom_vline(data = data.frame(value = quantile(obs$cumu_deaths, 0.5),
+  geom_vline(data = data.frame(value = quantile(MMODS_obs$cumu_deaths, 0.5),
                                quant = 50), 
              aes(xintercept = value,  color = "darkgrey"), size = 0.3)+
-  geom_rect(data = data.frame(xmin = quantile(obs$cumu_deaths, 0.05),
-                              xmax = quantile(obs$cumu_deaths, 0.95),
+  geom_rect(data = data.frame(xmin = quantile(MMODS_obs$cumu_deaths, 0.05),
+                              xmax = quantile(MMODS_obs$cumu_deaths, 0.95),
                               ymin = -Inf, ymax = Inf), 
             aes(xmin = xmin, xmax = xmax,  
                 ymin = ymin, ymax = ymax, 
@@ -141,12 +138,12 @@ p1
 
 We can aggregate the individual projections using either averaging approach (LOP vs. Vincent). We will try both frameworks with all trimming alternatives (interior vs. exterior CDF trimming).
 
-First, we define a `data.frame` with all possible aggregation methods to try.
+First, we define a `data.frame` with all possible aggregation methods to try. We define the averaging method (LOP vs. Vincent), `method`, the number of values to trim, `n_trim`,  and whether trimming should be interior or exterior, `int_ext`.
 
 ```{r}
 # define methods to test
-test_trim <- expand.grid(n_trim = c(NA,1:16), 
-                         method = c("LOP", "vincent"),
+test_trim <- expand.grid(method = c("LOP", "vincent"),
+                         n_trim = c(NA,1:16), 
                          int_ext = c("interior", "exterior"))
 test_trim$trim_type = paste("cdf", test_trim$int_ext, sep = "_")
 # filter out duplicates (only trim even exterior and odd interior)
@@ -156,10 +153,15 @@ test_trim = test_trim %>%
   filter(rm_flag == 0 | is.na(rm_flag)) %>% 
   dplyr::select(-rm_flag)
 
+```
+
+Then, we implement the aggregation using each of these methods. To aggregate a set of cdfs, we use the `aggregate_cdfs()` function, where `data` is a data.frame containing all projections, `id_var` is the name of the column that should be aggregated across, `method` is `"LOP"` or `"vincent"`, `ret_quantiles` are the quantiles of teh aggregate distribution to be returned, and `weighting_scheme` and `n_trim` define the weighting scheme. 
+
+```{r}
 # run all possible combinations
 ret_quant <- seq(0,1, 0.01)
 aggs <- foreach(i=1:nrow(test_trim)) %dopar% {
-  aggregate_cdfs(projs %>% mutate(quantile = quantile/100),
+  aggregate_cdfs(data = MMODS,
                  id_var = "id", 
                  method = test_trim[i,"method"], 
                  ret_quantiles = ret_quant,
@@ -179,7 +181,7 @@ aggs <- aggs %>%
 
 We can plot each of the aggregates.
 
-```{r, plot-aggs, echo = FALSE}
+```{r, plot-aggs, echo = FALSE, fig.height = 5}
 aggs <- aggs %>% 
   mutate(y_pos = n_trim + (n_trim %% 2) + ifelse(method == "LOP", 0.3, - 0.3))
 limts = range(aggs %>% 
@@ -233,7 +235,7 @@ p <- agg_df %>%
 
 p2a = plot_MMODS_aggs(aggs %>% 
                         filter( int_ext == "exterior"),
-                      obs, 
+                      MMODS_obs, 
                       labs_intext, 
                       colrs_agg, 
                       limts) + 
@@ -244,7 +246,7 @@ p2a = plot_MMODS_aggs(aggs %>%
 
 p2b = plot_MMODS_aggs(aggs %>% 
                         filter( int_ext == "interior"),
-                      obs, 
+                      MMODS_obs, 
                       labs_intext, 
                       colrs_agg, 
                       limts) +
@@ -256,10 +258,10 @@ p2b = plot_MMODS_aggs(aggs %>%
 p2a_inset = aggs %>% 
   filter(int_ext == "exterior") %>%
   ggplot()+
-  geom_vline(data = data.frame(x = median(obs$cumu_deaths)),
+  geom_vline(data = data.frame(x = median(MMODS_obs$cumu_deaths)),
              aes(xintercept = x, color = "darkgrey"), size = 0.3)+
-  geom_rect(data = data.frame(xmin = quantile(obs$cumu_deaths, 0.05),
-                              xmax = quantile(obs$cumu_deaths, 0.95),
+  geom_rect(data = data.frame(xmin = quantile(MMODS_obs$cumu_deaths, 0.05),
+                              xmax = quantile(MMODS_obs$cumu_deaths, 0.95),
                               ymin = -Inf, ymax = Inf), 
             aes(xmin = xmin, xmax = xmax,  ymin = ymin, ymax = ymax, fill ="darkgrey", alpha = 0.3))+
   geom_path(data = aggs %>% filter(int_ext == "exterior", round(quantile,2) %in% c(0.05,0.95)), 
@@ -305,8 +307,8 @@ Here we evaluate the performance of each aggregate distribution against the dist
 Before evaluating performance, let's do a quick check on our observations. Although population size is restricted to 90,000-110,000 individuals, it is not constant for all counties. So, to make sure population size isn't confounding the observed number of cumulative deaths, we double check the correlation between the two.
 
 ```{r obs-corr, echo = FALSE}
-obs %>%
-  ggplot(aes(x = Population.x, y = cumu_deaths)) +
+MMODS_obs %>%
+  ggplot(aes(x = Population, y = cumu_deaths)) +
   geom_point() +
   labs(x = "county population size", y = "observed cumulative deaths") +
   scale_x_continuous(labels = comma) +
@@ -369,10 +371,11 @@ cov <- function(q, v, obs, cov_level){
 ```
 
 Now, apply each function to all aggregate distributions.
+
 ```{r calc-scores}
 # merge the aggregates and observations
-scores_CRPS <- crossing(aggs,obs %>% dplyr::select(cumu_deaths) %>% 
-                          mutate(obs_num = 1:nrow(obs)))
+scores_CRPS <- crossing(aggs,MMODS_obs %>% dplyr::select(cumu_deaths) %>% 
+                          mutate(obs_num = 1:nrow(MMODS_obs)))
 # set as data.table
 setDT(scores_CRPS)
 # get CRPS score
@@ -386,16 +389,16 @@ pdfs <- setDT(aggs)[, .(samp = approx(quantile, value, runif(n_samp))$y),
 pdfs <- pdfs[, .(dens_x = density(samp)$x, 
                  dens_y = density(samp)$y), 
              by = .(method, n_trim, int_ext)]
-scores_log <- crossing(pdfs, obs %>% dplyr::select(cumu_deaths) %>% mutate(obs_num = 1:nrow(obs)))
+scores_log <- crossing(pdfs, MMODS_obs %>% dplyr::select(cumu_deaths) %>% mutate(obs_num = 1:nrow(MMODS_obs)))
 scores_log <- setDT(scores_log)[, .(logS = log_score(dens_x, dens_y, cumu_deaths)), 
                    by = .(method, n_trim, int_ext, obs_num, cumu_deaths)]
 
 # kullback-leibler
-scores_klic <- pdfs[, .(klic = KLIC(dens_x, dens_y, obs$cumu_deaths)),
+scores_klic <- pdfs[, .(klic = KLIC(dens_x, dens_y, MMODS_obs$cumu_deaths)),
                     by = .(method, n_trim, int_ext)]
   
 # coverage
-scores_cov <- aggs[, .(cov90 = cov(quantile, value, obs$cumu_deaths, 0.9)), 
+scores_cov <- aggs[, .(cov90 = cov(quantile, value, MMODS_obs$cumu_deaths, 0.9)), 
                    by = .(method, n_trim, int_ext)]
 
 # create one df for all scores
@@ -408,9 +411,9 @@ scores <- merge(scores, scores_cov)
 
 ```
 
-Now we can plot the outcomes of this performance analysis.
+We can plot the outcomes of this performance analysis.
 
-```{r plot-scores, echo = FALSE}
+```{r plot-scores, echo = FALSE, fig.height = 5, fig.width = 4}
 
 p3 <- reshape2::melt(scores, c("method", "n_trim", "int_ext"), 
                          value.name = "score", variable.name = "metric") %>%
@@ -463,7 +466,7 @@ p2a = plot_MMODS_aggs(aggs %>%
                         filter(int_ext == "exterior",
                                n_trim %in% c(0,3,4,7,8,11,12,15,16)) %>% 
                         mutate(y_pos = y_pos - n_trim/2),
-                      obs, 
+                      MMODS_obs, 
                       labs_intext, 
                       colrs_agg, 
                       limts) + 
@@ -476,7 +479,7 @@ p2b = plot_MMODS_aggs(aggs %>%
                         filter( int_ext == "interior",
                                n_trim %in% c(0,3,4,7,8,11,12,15,16)) %>% 
                         mutate(y_pos = y_pos - ifelse(n_trim == 0, 0, n_trim+1)/2),
-                      obs, 
+                      MMODS_obs, 
                       labs_intext, 
                       colrs_agg, 
                       limts) +
@@ -492,10 +495,10 @@ p2a_inset = aggs %>%
          y_pos = y_pos - n_trim/2) %>%
   reshape2::dcast(n_trim + method + int_ext + trim_type + y_pos ~ quantile, value.var = "value") %>%
   ggplot()+
-  geom_vline(data = data.frame(x = median(obs$cumu_deaths)),
+  geom_vline(data = data.frame(x = median(MMODS_obs$cumu_deaths)),
              aes(xintercept = x, color = "darkgrey"), size = 0.3)+
-  geom_rect(data = data.frame(xmin = quantile(obs$cumu_deaths, 0.05),
-                              xmax = quantile(obs$cumu_deaths, 0.95),
+  geom_rect(data = data.frame(xmin = quantile(MMODS_obs$cumu_deaths, 0.05),
+                              xmax = quantile(MMODS_obs$cumu_deaths, 0.95),
                               ymin = -Inf, ymax = Inf), 
             aes(xmin = xmin, xmax = xmax,  ymin = ymin, ymax = ymax, fill ="darkgrey", alpha = 0.3))+
   geom_linerange(aes(xmin = Q5,
@@ -592,15 +595,15 @@ plot_grid(plot_grid(p1,
 ggsave(paste0(fig_path,"performance_trimming.pdf"), width = 6, height = 4.3, units = "in")
 ```
 
-```{r ms-vals}
+```{r ms-vals, include = FALSE}
 aggs_main_text <- aggs %>% filter(n_trim %in% c(0,3,4,7,8,11,12,15,16))
 ### Values for text ####
 ms_vals <- list(
   ind_mod = list(
-    min_median = min(projs %>% filter(quantile == 50) %>% pull(value)),
-    max_median = max(projs %>% filter(quantile == 50) %>% pull(value)),
-    min_90_PI = min(projs %>% group_by(id) %>% summarise(range = value[quantile == 95] - value[quantile == 5])  %>% pull(range)),
-    max_90_PI = max(projs %>% group_by(id) %>% summarise(range = value[quantile == 95] - value[quantile == 5])  %>% pull(range))
+    min_median = min(MMODS %>% filter(quantile == 50) %>% pull(value)),
+    max_median = max(MMODS %>% filter(quantile == 50) %>% pull(value)),
+    min_90_PI = min(MMODS %>% group_by(id) %>% summarise(range = value[quantile == 95] - value[quantile == 5])  %>% pull(range)),
+    max_90_PI = max(MMODS %>% group_by(id) %>% summarise(range = value[quantile == 95] - value[quantile == 5])  %>% pull(range))
   ),
   aggs = list(
     min_Q95_LOP = min(aggs_main_text %>% filter(round(quantile,2) == 0.95, method == "LOP") %>% pull(value)),
