@@ -140,10 +140,14 @@ beta <- rnorm(n_samples*4,
                 rep(m3_beta, n_samples),
                 rep(m4_beta, n_samples)), 
               sd = sig_beta)
+# verify all transmission rates are positive
+which(beta <= 0)
 
 # define unique recovery rate (gamma) for each simulation
 mu_recov_time <- 1; sig_recov_time <- 0.1
 recov_time <- rnorm(n_samples*4, mu_recov_time, sig_recov_time) 
+# verify all recovery times are positive
+which(recov_time <= 0)
 
 # define unique waning rate (rho) for each simulation and structural uncertainty scenario
 wane_time_unlikely <- 0; wane_time_likely <- 26
