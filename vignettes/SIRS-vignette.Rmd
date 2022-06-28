@@ -38,6 +38,11 @@ library(ggplot2)
 library(scales)
 library(cowplot)
 library(tidyr)
+# for rmd
+library(knitr)
+
+# set seed so we can replicate results
+set.seed(20)
 ```
 
 ## SIRS Model
@@ -292,9 +297,6 @@ colrs_mod = rev(paste0("grey",round( seq(0.15, 0.85, length.out = 4),2)*100))
 We simulate the model using all the parameter sets we've defined. To do so, we need to define the length of the simulation (52 weeks), population size (1000 individuals), and initial conditions (1.5% infected, all else susceptible).
 
 ```{r run-sims}
-# set seed so we can replicate results
-set.seed(20)
-
 # other model parameters
 T <- 52 # length of simulation  (in weeks)
 N <- 1000 # number of individuals in the population
@@ -346,6 +348,16 @@ p_ts
 ggsave(paste0(fig_path, "timeseries.pdf"),p_ts, width = 13, height = 9)
 
 rm(plt)
+```
+
+Some simulations fade out early in the first wave, let's identify in how many simulations this occurs. 
+
+```{r find-early-fadeouts}
+inital_fadeout_thresh <- 100
+kable(out$metrics %>% 
+  group_by(model, struc_uncert) %>%
+  #filter() %>%
+  summarise(n = length(which((cum_cases < inital_fadeout_thresh)))))
 ```
 
 Then, for each time series we track cumulative and peak cases. We summarize the output into distributions (both pdfs and cdfs) for each metric. For this vignette, we show results only for cumulative cases, though all analyses are performed for peak cases as well.  
