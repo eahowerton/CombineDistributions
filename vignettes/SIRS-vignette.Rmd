@@ -142,45 +142,46 @@ beta <- rnorm(n_samples*4,
               sd = sig_beta)
 
 # define unique recovery rate (gamma) for each simulation
-mu_gamma <- 1; sig_gamma <- 0.1
-gamma <- rnorm(n_samples*4, mu_gamma, sig_gamma) 
+mu_recov_time <- 1; sig_recov_time <- 0.1
+recov_time <- rnorm(n_samples*4, mu_recov_time, sig_recov_time) 
 
 # define unique waning rate (rho) for each simulation and structural uncertainty scenario
-rho_unlikely <- 0; rho_likely <- 26
+wane_time_unlikely <- 0; wane_time_likely <- 26
 
 # structural uncertainty scenario 1: none
 # no models consider structural uncertainty
-rho_none <- rep(rho_unlikely, n_samples*4) 
+rho_none <- rep(wane_time_unlikely, n_samples*4) 
 
 # structural uncertainty scenario 2: between models
-rho_btn <- c(rep(rho_unlikely, n_samples), # model A: waning unlikely
-             rep(rho_likely, n_samples),   # model B: waning likely
-             rep(rho_unlikely, n_samples), # model C: waning unlikely
-             rep(rho_likely, n_samples))   # model D: waning likely
+rho_btn <- c(rep(wane_time_unlikely, n_samples), # model A: waning unlikely
+             rep(wane_time_likely, n_samples),   # model B: waning likely
+             rep(wane_time_unlikely, n_samples), # model C: waning unlikely
+             rep(wane_time_likely, n_samples))   # model D: waning likely
              
 
 # structural uncertainty scenario 3: within models
 # all models assume wanings/no waning with equal probability
-rho_win <- rep(c(rep(rho_unlikely, n_samples/2), rep(rho_likely, n_samples/2)),4)
+rho_win <- rep(c(rep(wane_time_unlikely, n_samples/2), rep(wane_time_likely, n_samples/2)),4)
 
 # create data.frame of parameters for each uncertainty scenario
 # scenario 1: none
-none <- data.frame(beta = beta, gamma = gamma,rho = rho_none, 
+none <- data.frame(beta = beta, recov_time = recov_time,rho = rho_none, 
                    model = sort(rep(LETTERS[1:4], n_samples)),
                    struc_uncert = "none")
 # scenario 2: between
-btn <- data.frame(beta = beta, gamma = gamma, rho = rho_btn, 
+btn <- data.frame(beta = beta, recov_time = recov_time, rho = rho_btn, 
                   model = sort(rep(LETTERS[1:4], n_samples)),
                   struc_uncert = "btn")
 # scenario 3: within
-win <- data.frame(beta = beta, gamma = gamma, rho = rho_win, 
+win <- data.frame(beta = beta, recov_time = recov_time, rho = rho_win, 
                   model = sort(rep(LETTERS[1:4], n_samples)),
                   struc_uncert = "win")
 
 # combine all parameters into one data.frame
 all_params <- rbind(none, btn, win)
 # correct any negative parameters and convert to rate
-all_params$gamma = with(all_params, ifelse(gamma == 0, 0, 1/gamma))
+all_params$gamma = with(all_params, ifelse(recov_time == 0, 0, 1/recov_time))
+all_params <- all_params %>% select(-recov_time)
 all_params$rho = with(all_params, ifelse(rho == 0, 0, 1/rho))
 # add simulation number
 all_params$sim = 1:nrow(all_params)
@@ -480,21 +481,21 @@ obs_beta <- c(rnorm(n_obs, m1_beta, sig_beta),
               rnorm(n_obs, m4_beta, sig_beta),
               rnorm(n_obs, mean(c(m1_beta, m2_beta, m3_beta, m4_beta)),sig_beta))
 # define true recovery rate
-obs_gamma <- rnorm(n_obs*5, mu_gamma, sig_gamma) 
+obs_recov_time <- rnorm(n_obs*5, mu_recov_time, sig_recov_time) 
 # define true waning
-obs_params <- rbind(data.frame(beta = obs_beta, gamma = obs_gamma, rho = ifelse(rho_likely == 0, 0, 1/rho_likely), 
+obs_params <- rbind(data.frame(beta = obs_beta, obs_recov_time = obs_recov_time, rho = ifelse(wane_time_likely == 0, 0, 1/wane_time_likely), 
                                true_beta = sort(rep(c(paste0("m", 1:4), "mean"), n_obs)),
                                true_rho = "Y"),
-                    data.frame(beta = obs_beta, gamma = 1/obs_gamma, rho = ifelse(rho_unlikely == 0, 0, 1/rho_unlikely), 
+                    data.frame(beta = obs_beta, obs_recov_time = 1/obs_recov_time, rho = ifelse(wane_time_unlikely == 0, 0, 1/wane_time_unlikely), 
                                true_beta = sort(rep(c(paste0("m", 1:4), "mean"), n_obs)),
                                true_rho = "N"))
-obs_params$gamma = with(obs_params, ifelse(gamma == 0, 0, 1/gamma))
+obs_params$gamma = with(obs_params, ifelse(obs_recov_time == 0, 0, 1/obs_recov_time))
 obs_params$sim = 1:nrow(obs_params)
 
 # simulate observations given these true params
 obs <- run_cb_sir(T, nrow(obs_params), init, obs_params$beta, obs_params$gamma, obs_params$rho)
 obs <- obs$metrics
-obs <- obs %>% left_join(obs_params)
+obs <- obs %>% left_join(obs_params) %>% select(-obs_recov_time)
 obs <- reshape2::melt(obs, c("sim", "beta", "gamma", "rho", "true_beta", "true_rho"))
 ```
 
