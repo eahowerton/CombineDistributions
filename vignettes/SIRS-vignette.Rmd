@@ -885,7 +885,109 @@ ggsave(paste0(fig_path,"crps_diff_peak.pdf"), width = 15, height = 12 , units = 
 ```
 
 
-```{r values-for-text, echo = FALSE}
+```{r supp-othercase, include = FALSE}
+# structural uncertainty case 4: all models assume waning immunity
+rho_all <- rep(wane_time_likely, n_samples*4)
+supp_params <- data.frame(beta = beta, recov_time = recov_time,rho = rho_all, 
+                   model = sort(rep(LETTERS[1:4], n_samples)),
+                   struc_uncert = "all")
+# correct any negative parameters and convert to rate
+supp_params$gamma = with(supp_params, ifelse(recov_time == 0, 0, 1/recov_time))
+supp_params$rho = with(supp_params, ifelse(rho == 0, 0, 1/rho))
+# add simulation number
+supp_params$sim = 1:nrow(supp_params)
+
+# run the chain binomial model
+supp_out <- run_cb_sir(T, nrow(supp_params), init , supp_params$beta, supp_params$gamma, supp_params$rho)
+# reshape supp_out metrics
+supp_out$metrics <- supp_out$metrics %>% left_join(supp_params)
+# reshape supp_out time series
+supp_out$timeseries <- as.data.frame(supp_out$timeseries[,"I",]) %>%
+  mutate(id = 1:n()) %>%
+  reshape2::melt("id") %>%
+  rename(time = variable) %>%
+  mutate(time = as.integer(gsub("V","",time)))
+
+# calculate individual distributions
+# convert to long format
+supp_out$metrics <- reshape2::melt(supp_out$metrics, c("sim", "beta", "gamma", "rho", "model", "struc_uncert"))
+# CDFs
+q <- 1:99/100
+supp_cdfs <- setDT(supp_out$metrics)[,.(value = quantile(value, q), quantile = q), 
+            by = .(model, struc_uncert, variable)]
+# PDFs
+supp_pdfs <- setDT(supp_out$metrics)[,.(x = density(value, adjust = 2)$x, y = density(value, adjust = 2)$y),
+                   by = .(model, struc_uncert, variable)]
+
+# aggregate
+supp_agg_cdfs <- rbind(
+  aggregate_cdfs(supp_cdfs, id_var = "model", 
+                 group_by = c("struc_uncert", "variable"),
+                 method = "LOP", 
+                 ret_quantiles = q)[,method:="LOP"],
+  aggregate_cdfs(supp_cdfs, id_var = "model", 
+                 group_by = c("struc_uncert", "variable"),
+                 method = "vincent", 
+                 ret_quantiles = q)[,method := "Vincent"]
+  )
+  
+# to get aggregate pdfs, sample from std. uniform and draw from distributions
+supp_agg_pdfs <- supp_agg_cdfs[, .(samps = approx(quantile, value, runif(50000))$y), 
+                     by = .(struc_uncert, variable, method)] %>%
+  .[!is.na(samps)] %>%
+  .[, .(x = density(samps, adjust = 1.5)$x, y = density(samps, adjust = 1.5)$y), 
+    by = .(struc_uncert, variable, method)]
+
+pa <- supp_pdfs %>% 
+  filter(variable == "cum_cases" & struc_uncert == "all") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))) %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_path(aes(color = as.factor(model)), size= 0.5) +
+  facet_grid(cols = vars(struc_uncert)) +
+  coord_cartesian(xlim = c(0,2000), 
+                  ylim = range(pdfs %>% filter(variable == "cum_cases") %>% select(y)))+
+  scale_color_manual(values = rev(colrs_mod),
+                     labels = ub_labs) +
+  scale_x_continuous(label = comma, 
+                     name = "cumulative cases") +
+  scale_y_continuous(expand = c(0,0),
+                     name = "individual predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.92,0.89),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank(), 
+        strip.text = element_blank())
+
+pb <- supp_agg_pdfs %>% 
+  filter(variable == "cum_cases") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_simp))) %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_path(aes(color = method), size = 1, alpha = 0.8) +
+  coord_cartesian(xlim = c(0,2000), 
+                  ylim = range(pdfs %>% 
+                                 filter(variable == "cum_cases") %>% 
+                                 select(y)))+
+  scale_color_manual(values = colrs_agg) +
+  scale_x_continuous(label = comma, name = "cumulative cases") +
+  scale_y_continuous(expand = c(0,0), name = "aggregate predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.height = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.position = c(0.9,0.89),
+        legend.text = element_text(size = rel(0.7)),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank())
+
+plot_grid(pa, pb, nrow = 1)
+ggsave(paste0(fig_path,"all_waning_pdfs.pdf"), width = 10, height = 5 , units = "in")
+```
+
+```{r values-for-text, include = FALSE}
 # percent of cumu case observations where LOP performs better
 # structural uncertainty = btn only
 obs %>%
