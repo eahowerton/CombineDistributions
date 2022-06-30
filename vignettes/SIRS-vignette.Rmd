@@ -367,7 +367,7 @@ Then, for each time series we track cumulative and peak cases. We summarize the 
 out$metrics <- reshape2::melt(out$metrics, c("sim", "beta", "gamma", "rho", "model", "struc_uncert"))
 
 # CDFs
-q <- 1:99/100
+q <- 1:999/1000
 cdfs <- setDT(out$metrics)[,.(value = quantile(value, q), quantile = q), 
             by = .(model, struc_uncert, variable)]
 
@@ -428,7 +428,7 @@ agg_cdfs <- rbind(
   )
   
 # to get aggregate pdfs, sample from std. uniform and draw from distributions
-agg_pdfs <- agg_cdfs[, .(samps = approx(quantile, value, runif(50000))$y), 
+agg_pdfs <- agg_cdfs[, .(samps = approx(quantile, value, runif(100000))$y), 
                      by = .(struc_uncert, variable, method)] %>%
   .[!is.na(samps)] %>%
   .[, .(x = density(samps, adjust = 1.5)$x, y = density(samps, adjust = 1.5)$y), 
@@ -575,11 +575,35 @@ We use the continuous rank probability score (CRPS) [@matheson_scoring_1976-1] t
 
 ```{r crps}
 # define function to implement CRPS 
-u1 = runif(10000)
-u2 = runif(10000)
-CRPS <- function(q,v,o,rule=2, ties="ordered") {
-  x = approx(q,v,u1,rule=rule, ties=ties)
-  return(mean(abs(x$y-o[1])) - 1/2*mean(abs(x$y-approx(q,v,u2,rule=rule, ties=ties)$y)))
+# assume piecewise linear cdf, jumps to 0/1 after last defined quantile
+CRPS <- function(q,v,o,rule=2){
+  # add o into v to calculate area under curve
+  v <- sort(c(v, o))
+  # find integral cutoff where v = o
+  vl <- max(which(v == o))
+  if(vl == 1){
+    q <- c(0,q)
+    areas_1 <- (v[2] - v[1])
+    areas_2 <- trapz(v[-1], (q[-1]-1)^2)
+  }
+  else if (vl == length(v)){
+    q <- c(q,1)
+    areas_1 <- trapz(v[-length(q)], q[-length(q)]^2)
+    areas_2 <- v[length(v)] - v[length(v)-1]
+  }
+  else{
+    # add q_o into q to calculate area under curve
+    q <- c(q[1:(vl-1)],NA,q[(vl):length(q)])
+    # interpolate quantile for obs
+    q_o <- q[vl-1] + ((q[vl+1] - q[vl-1])/(v[vl+1] - v[vl-1]))*(o - v[vl-1])
+    # add q_o into q to calculate area under curve
+    q[vl] <- q_o
+    # calculate area of each trapezoid using CRPS formula for each subset
+    areas_1 <- trapz(v[1:vl], q[1:vl]^2)
+    areas_2 <- trapz(v[vl:length(v)], (q[vl:length(v)]-1)^2)
+  }
+  # return sum of areas
+  return(sum(c(areas_1, areas_2)))
 }
 
 # implement CRPS
@@ -590,8 +614,9 @@ scores <- obs %>%
   mutate(obs_num = 1:length(obs)) %>%
   dplyr::left_join(agg_cdfs)
 # get CRPS score
-scores <- setDT(scores)[, .(CRPS = CRPS(quantile,value,obs)), 
+scores <- setDT(scores)[, .(CRPS = CRPS(quantile,value,obs)), #
                    by=.(method, variable, struc_uncert, obs_num, obs)]
+
 ```
 
 The CRPS results can be plotted for the LOP and Vincent aggregates across three structural uncertainty scenarios. 
@@ -932,7 +957,7 @@ supp_agg_cdfs <- rbind(
   )
   
 # to get aggregate pdfs, sample from std. uniform and draw from distributions
-supp_agg_pdfs <- supp_agg_cdfs[, .(samps = approx(quantile, value, runif(50000))$y), 
+supp_agg_pdfs <- supp_agg_cdfs[, .(samps = approx(quantile, value, runif(100000))$y), 
                      by = .(struc_uncert, variable, method)] %>%
   .[!is.na(samps)] %>%
   .[, .(x = density(samps, adjust = 1.5)$x, y = density(samps, adjust = 1.5)$y), 
