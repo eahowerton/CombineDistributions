@@ -19,6 +19,8 @@ list containing two elements: (1) vector of values to keep;
 For exterior trimming, remove \code{n_trim/2} lowest and highest values.
 }
 \examples{
+\dontrun{
 keep_vals_exterior(2, 4)
 keep_vals_exterior(4, 5)
+}
 }

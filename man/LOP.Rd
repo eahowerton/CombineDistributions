@@ -14,6 +14,8 @@ LOP(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...)
 \item{id}{vector containing unqiue ids to distinguish cdf to be aggregated}
 
 \item{ret_quantiles}{vector of quantiles to return specifying the aggregate distribution}
+
+\item{weight_fn}{function? specifying how to weight each model *FIX}
 }
 \value{
 vector of values for corresponding \code{ret_quantiles} of aggregate distribution

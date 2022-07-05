@@ -13,17 +13,24 @@ License: `use_mit_license()`, `use_gpl3_license()` or friends to
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.0
 Suggests: 
+    cowplot,
+    doParallel,
+    foreach,
+    ggplot2,
     knitr,
     rmarkdown,
+    pracma,
+    readr,
+    scales,
+    tidyr,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Depends: 
     data.table,
     R (>= 2.10)
 Imports: 
-    data.table,
     dplyr,
     tibble,
     magrittr,

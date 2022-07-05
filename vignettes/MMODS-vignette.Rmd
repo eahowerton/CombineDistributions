@@ -4,7 +4,7 @@ bibliography: bibfile.bib
 output: 
   rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Aggregating predictions from an SIRS model}
+  %\VignetteIndexEntry{Aggregation and trimming on real-world COVID-19 death predictions}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 editor_options: 
