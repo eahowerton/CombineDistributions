@@ -8,7 +8,7 @@
 #' @param value vector containing values for all cdfs to be aggregated
 #' @param id vector containing unqiue ids to distinguish cdf to be aggregated
 #' @param ret_quantiles vector of quantiles to return specifying the aggregate distribution
-#' @weight_fn function? specifying how to weight each model *FIX
+#' @param weight_fn function? specifying how to weight each model *FIX
 #'
 #' @return vector of values for corresponding \code{ret_quantiles} of aggregate distribution
 #'

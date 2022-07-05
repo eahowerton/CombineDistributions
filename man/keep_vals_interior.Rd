@@ -25,6 +25,8 @@ Interior trimming requires (1) \code{n_trim < n_ids} and
 \code{n_trim} is increased to \code{n_trim + 1}.
 }
 \examples{
+\dontrun{
 keep_vals_interior(2, 4)
 keep_vals_interior(1, 4)
+}
 }
