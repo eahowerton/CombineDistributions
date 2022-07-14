@@ -16,7 +16,15 @@
 #' @export
 vincent <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...){
   data = data.table::data.table(id = id, quantile = quantile, value = value)
-  df_weighted <- weight_fn(data, ...)
+  # interpolate individual cdfs to same quantiles
+  quants <- unique(quantile)
+  if(length(quants)>1000){
+    limits = c(min(quants),max(quants))
+    if(anyNA(limits)){return(NA)
+    }
+  quants <- seq(limits[1], limits[2], length.out = 1000)}
+  df_long <- evaluate_qf(quantile, value, id, quants)
+  df_weighted <- weight_fn(df_long, ...)
   df_weighted <- remove_zero_weights(df_weighted)
   df_agg <- calculate_aggregate_vin(df_weighted, ret_quantiles)
   return(df_agg$value)
@@ -32,4 +40,32 @@ calculate_aggregate_vin <- function(data, ret_quantiles){ #model_weights
   return(vinc_agg)
 }
 
+#' function to interpolate to consistent quantiles
+evaluate_qf <- function(quantile, value, id, ret_quants){
+  # create df to store interpolations
+  interp_functions <- data.frame(quantile = double(),
+                                 id = character(),
+                                 value = double())
+  # for each id, subset df and create interpolation
+  for(i in unique(id)){
+    quant_sub <- quantile[which(id == i)]
+    val_sub <- value[which(id == i)]
+    if(length(unique(val_sub)) == 1){
+      interp_functions = interp_functions %>%
+        dplyr::bind_rows(data.frame(quantile = quant_vals,
+                                    value = val_sub,
+                                    id = i))
+    }
+    else{
+      interp <- approx(x = quant_sub,
+                       y = val_sub,
+                       xout = ret_quants,
+                       method = "linear",
+                       rule = 2,
+                       ties = list("ordered", max))
+      interp_functions = interp_functions %>% dplyr::bind_rows(data.frame(quantile = interp$x, id = i, value = interp$y))
+    }
+  }
+  return(interp_functions)
+}
 
