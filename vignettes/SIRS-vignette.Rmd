@@ -28,8 +28,10 @@ This vignette implements the first case study from [@EAH-ms]. We simulate a mult
 
 To start, we load a few packages.
 ```{r preamble}
-# for agggregation
+# for aggregation
 library(CombineDistributions) 
+# for scoring
+library(pracma)
 # for data manipulation
 library(dplyr) 
 library(data.table)
@@ -210,7 +212,7 @@ p_params <- all_params %>%
              scales = "free",
              ncol = 3) +
   labs(x = "parameter value", y = "density", subtitle = "A: parametric uncertainty") +
-  scale_color_brewer(palette = "Set1", direction = 0) + 
+  scale_color_brewer(palette = "Greys", direction = -1) + 
   theme_bw() + 
   theme(legend.position = "bottom", 
         legend.title = element_blank(),
@@ -246,13 +248,13 @@ p_rho <-  all_params %>%
         strip.placement = "outside")
 p_params <- plot_grid(p_params, p_rho, ncol = 1, axis = "lr", align = "vh")
 
-ggsave(paste0(fig_path, "param_distributions.pdf"),p_params, width = 12, height = 9)
+ggsave(paste0(fig_path, "param_distributions.pdf"),p_params, width = 8, height = 6)
 
 ```
 
 ```{r plot-setup, include = FALSE}
 # defnie base text size
-bs <- 8
+bs <- 10
 
 # define facet labels
 labs_struc <- c("atop(Structural~uncertainty~bold(not~represented),all~models~assume~no~waning)", 
@@ -267,9 +269,9 @@ ub_labs <- list(bquote(mu[beta]==.(m1_beta)),
                 bquote(mu[beta]==.(m4_beta)))
 
   
-labs_struc_simp = c("Structural~uncertainty~bold(not~represented)",
-                    "Structural~uncertainty~bold(represented~between~models)",
-                    "Structural~uncertainty~bold(represented~within~models)")
+labs_struc_simp = c("bold(not~represented)",
+                    "bold(represented~between~models)",
+                    "bold(represented~within~models)")
 names(labs_struc_simp) = c("none", "btn", "win")
 
 labs_struc_super_simp <- c("not represented", "represented between models", "represented within models")
@@ -345,7 +347,7 @@ p_ts = plt %>%
   theme(legend.position = "none", 
         panel.grid = element_blank())
 p_ts
-ggsave(paste0(fig_path, "timeseries.pdf"),p_ts, width = 13, height = 9)
+ggsave(paste0(fig_path, "timeseries.pdf"),p_ts, width = 8, height = 6)
 
 rm(plt)
 ```
@@ -624,16 +626,17 @@ The CRPS results can be plotted for the LOP and Vincent aggregates across three 
 ```{r plot-CRPS, echo = FALSE, fig.width = 9, fig.height = 4}
 crps_cum <- scores %>%
   filter(variable == "cum_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
   ggplot(aes(x = obs, y = CRPS, color = method)) + 
   geom_line(size = 0.8) + 
-  facet_grid(cols = vars(struc_uncert), 
-             labeller = label_parsed) +
+  facet_grid(cols = vars(struc_uncert)) +
   labs(x = "observed cumulative cases", color = "aggregate") +
   scale_color_manual(values = colrs_agg) + 
   scale_x_continuous(labels = comma) +
   theme_bw() + 
-  theme(legend.position = c(0.92,0.86), 
+  theme(legend.margin=margin(0,0,0,0),
+        legend.position = c(0.92,0.86), 
+        legend.text = element_text(size = rel(0.7)),
         legend.title = element_blank(),
         panel.grid = element_blank(), 
         strip.background = element_blank())
@@ -641,11 +644,10 @@ crps_cum
 
 crps_peak <- scores %>%
   filter(variable == "peak_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
   ggplot(aes(x = obs, y = CRPS, color = method)) + 
   geom_line(size = 0.8) + 
-  facet_grid(cols = vars(struc_uncert), 
-             labeller = label_parsed) +
+  facet_grid(cols = vars(struc_uncert)) +
   labs(x = "observed peak cases", color = "aggregate") +
   scale_color_manual(values = colrs_agg) + 
   scale_x_continuous(labels = comma) +
@@ -663,18 +665,17 @@ crps_diff_cum <- scores %>%
   filter(variable == "cum_cases") %>%
   reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
   mutate(diff = Vincent - LOP) %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
   ggplot(aes(x = obs, y = diff)) + 
   geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
   geom_line() +
   geom_text(data = data.frame(x = c(0, 0 ),
                               y  = c(50,-50), 
-                              lab = c("LOP performs better", "Vincent performs better"), 
-                              struc_uncert = rep(labs_struc_simp[1], 2)), 
-            aes(x = x, y = y, label = lab, color = lab), angle = 90, size = 3, vjust = 0) +
-  facet_grid(cols = vars(struc_uncert), 
-             labeller = label_parsed) +
-  labs(x = "observed cumulative cases", y = "CRPS(Vincent) - CRPS(LOP)") +
+                              lab = c("LOP", "Vincent"), 
+                              struc_uncert = rep(labs_struc_super_simp[1], 2)), 
+            aes(x = x, y = y, label = lab, color = lab), angle = 90, size = bs/5, vjust = 0) +
+  facet_grid(cols = vars(struc_uncert)) +
+  labs(x = "observed cumulative cases", y = "difference in CRPS") +
   scale_color_manual(values = colrs_agg) + 
   scale_x_continuous(labels = comma) +
   theme_bw() + 
@@ -687,17 +688,16 @@ crps_diff_peak <- scores %>%
   filter(variable == "peak_cases") %>%
   reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
   mutate(diff = Vincent - LOP) %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
   ggplot(aes(x = obs, y = diff)) + 
   geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
   geom_line() +
   geom_text(data = data.frame(x = c(0, 0 ),
-                              y  = c(50,-50), 
-                              lab = c("LOP performs better", "Vincent performs better"), 
-                              struc_uncert = rep(labs_struc_simp[1], 2)), 
+                              y  = c(5,-5), 
+                              lab = c("LOP", "Vincent"), 
+                              struc_uncert = rep(labs_struc_super_simp[1], 2)), 
             aes(x = x, y = y, label = lab, color = lab), angle = 90, size = 3, vjust = 0) +
-  facet_grid(cols = vars(struc_uncert), 
-             labeller = label_parsed) +
+  facet_grid(cols = vars(struc_uncert)) +
   labs(x = "observed peak cases", y = "CRPS(Vincent) - CRPS(LOP)") +
   scale_color_manual(values = colrs_agg) + 
   scale_x_continuous(labels = comma) +
@@ -741,7 +741,7 @@ names(labs_rho) = c("Y", "N")
 # plot
 p3_cumu = scores_all %>% 
   filter(variable == "cum_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
   ggplot() +
   geom_vline(aes(xintercept = 0), color = "grey") +
   geom_text(data = data.frame(x = c(5,-5),
@@ -753,7 +753,7 @@ p3_cumu = scores_all %>%
   geom_segment(aes(x = lower_25, y = plot_y, xend = upper_75, yend = plot_y), size = 1.5) +
   geom_pointrange(aes(x = med, y = plot_y, xmin = lower, xmax = upper)) +
   facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
-             labeller = labeller(true_rho = labs_rho, struc_uncert = label_parsed)) +
+             labeller = labeller(true_rho = labs_rho)) +
   scale_color_manual(values = colrs_agg) +
   scale_x_continuous(limits = c(-max(abs(c(scores_all$lower, scores_all$upper))), 
                                 max(abs(c(scores_all$lower, scores_all$upper)))),
@@ -771,7 +771,7 @@ p3_cumu
 
 p3_peak = scores_all %>% 
   filter(variable == "peak_cases") %>%
-  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_simp[1], ifelse(struc_uncert == "btn", labs_struc_simp[2], labs_struc_simp[3])), levels = labs_struc_simp)) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
   ggplot() +
   geom_vline(aes(xintercept = 0), color = "grey") +
   geom_text(data = data.frame(x = c(5,-5),
@@ -783,7 +783,7 @@ p3_peak = scores_all %>%
   geom_segment(aes(x = lower_25, y = plot_y, xend = upper_75, yend = plot_y), size = 1.5) +
   geom_pointrange(aes(x = med, y = plot_y, xmin = lower, xmax = upper)) +
   facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
-             labeller = labeller(true_rho = labs_rho, struc_uncert = label_parsed)) +  scale_color_manual(values = colrs_agg) +
+             labeller = labeller(true_rho = labs_rho)) +  scale_color_manual(values = colrs_agg) +
   scale_x_continuous(limits = c(-max(abs(c(scores_all$lower, scores_all$upper))), 
                                 max(abs(c(scores_all$lower, scores_all$upper)))),
                      name = "CRPS(Vincent) - CRPS(LOP)") +
@@ -856,12 +856,12 @@ F4a = pdfs %>%
              labeller = labeller(struc_uncert = labs_struc_super_simp)) +
   scale_color_manual(labels = c(ub_labs, "LOP", "Vincent"), 
                      values = c(rev(colrs_mod), colrs_agg)) +
-  scale_x_continuous(expand = c(0.005,0),
+  scale_x_continuous(#expand = c(0.005,0),
                      label = comma, 
                      name = "peak cases") +
   scale_y_continuous(expand = c(0,0,0.05, 0), 
                      name = "individual and aggregate predictions\n(probability density function)") +
-  theme_bw(base_size = 8) +
+  theme_bw(base_size = bs) +
   theme(axis.text.y = element_blank(), 
         axis.ticks.y = element_blank(),
         legend.key.size = unit(0.3, "cm"),
@@ -875,40 +875,105 @@ F4a = pdfs %>%
 plot_grid(struc_text_plot, F4a, 
            ncol = 1, rel_heights = c(0.05,0.95), axis = "lr", align = "vh")
 
-ggsave(paste0(fig_path,"pdfs_scores_peak.pdf"), width = 6, height = 2.2 , units = "in")
+ggsave(paste0(fig_path,"pdfs_scores_peak.pdf"), width = 6, height = 2.5, units = "in")
 ```
 
-```{r supp, include = FALSE}
+```{r supp-cum, include = FALSE}
+# save into supplemental figures
+
+# 1: CRPS values
+crps_pct_cum <- scores %>%
+  filter(variable == "cum_cases") %>%
+  reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
+  mutate(pct_diff = (Vincent - LOP)/LOP) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
+  ggplot(aes(x = obs, y = pct_diff)) + 
+  geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
+  geom_line() +
+  geom_text(data = data.frame(x = c(0, 0 ),
+                              y  = c(0.3,-0.3),
+                              lab = c("LOP", "Vincent"),
+                              struc_uncert = rep(labs_struc_super_simp[1], 2)),
+            aes(x = x, y = y, label = lab, color = lab), angle = 90, size = bs/5, vjust = 0) +
+  facet_grid(cols = vars(struc_uncert)) +
+  labs(x = "observed cumulative cases", y = "% change in CRPS") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = percent) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+crps_pct_cum
+
 p2 <- plot_grid(crps_cum +
             labs(subtitle = "B: Continuous rank probability score (CRPS)"), 
           crps_diff_cum+
             labs(subtitle = "C: Difference in CRPS"), 
+          crps_pct_cum+
+            labs(subtitle = "D: Percent change in CRPS"), 
           ncol = 1)
 p2 <- plot_grid(fut_cum + 
             labs(subtitle = "A: Synthetic future observations"), 
-          p2, nrow = 1, rel_widths = c(0.3,0.7))
-plot_grid(p2, 
-          p3_cumu + 
-            labs(subtitle = "D: Distribution of CRPS difference"), ncol = 1, rel_heights = c(0.6,0.4))
+          p2, nrow = 1, rel_widths = c(0.4,0.6))
 
-ggsave(paste0(fig_path,"crps_diff_cum.pdf"), width = 15, height = 12 , units = "in")
+ggsave(paste0(fig_path,"crps_diff_cum1.pdf"), width = 9, height = 6, units = "in", scale = 1.05)
 
+
+# 2: performance distribution summary
+ggsave(paste0(fig_path,"crps_diff_cum2.pdf"), 
+       p3_cumu,
+       width = 9, height = 5 , units = "in")
+```
+
+
+```{r supp-peak, include = FALSE}
+# save into supplemental figures
+
+# 1: CRPS values
+crps_pct_peak <- scores %>%
+  filter(variable == "peak_cases") %>%
+  reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
+  mutate(pct_diff = (Vincent - LOP)/LOP) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
+  ggplot(aes(x = obs, y = pct_diff)) + 
+  geom_hline(aes(yintercept = 0), linetype = "dotted", size = 0.3) +
+  geom_line() +
+  geom_text(data = data.frame(x = c(0, 0 ),
+                              y  = c(0.05,-0.05),
+                              lab = c("LOP", "Vincent"),
+                              struc_uncert = rep(labs_struc_super_simp[1], 2)),
+            aes(x = x, y = y, label = lab, color = lab), angle = 90, size = bs/5, vjust = 0) +
+  facet_grid(cols = vars(struc_uncert)) +
+  labs(x = "observed cumulative cases", y = "% change in CRPS") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = percent) +
+  theme_bw() + 
+  theme(legend.position = "none", 
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+crps_pct_peak
 
 p2 <- plot_grid(crps_peak +
             labs(subtitle = "B: Continuous rank probability score (CRPS)"), 
           crps_diff_peak+
             labs(subtitle = "C: Difference in CRPS"), 
+          crps_pct_peak+
+            labs(subtitle = "D: Percent change in CRPS"), 
           ncol = 1)
 p2 <- plot_grid(fut_peak + 
             labs(subtitle = "A: Synthetic future observations"), 
-          p2, nrow = 1, rel_widths = c(0.3,0.7))
-plot_grid(p2, 
-          p3_peak + 
-            labs(subtitle = "D: Distribution of CRPS difference"), ncol = 1, rel_heights = c(0.6,0.4))
+          p2, nrow = 1, rel_widths = c(0.4,0.6))
 
-ggsave(paste0(fig_path,"crps_diff_peak.pdf"), width = 15, height = 12 , units = "in")
+ggsave(paste0(fig_path,"crps_diff_peak1.pdf"), width = 9, height = 6, units = "in", scale = 1.05)
+
+
+# 2: performance distribution summary
+ggsave(paste0(fig_path,"crps_diff_peak2.pdf"), 
+       p3_peak,
+       width = 9, height = 5 , units = "in")
 ```
-
 
 ```{r supp-othercase, include = FALSE}
 # structural uncertainty case 4: all models assume waning immunity
@@ -1009,7 +1074,7 @@ pb <- supp_agg_pdfs %>%
         strip.background = element_blank())
 
 plot_grid(pa, pb, nrow = 1)
-ggsave(paste0(fig_path,"all_waning_pdfs.pdf"), width = 10, height = 5 , units = "in")
+ggsave(paste0(fig_path,"all_waning_pdfs.pdf"), width = 7, height = 3 , units = "in")
 ```
 
 ```{r values-for-text, include = FALSE}
