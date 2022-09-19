@@ -35,7 +35,7 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, ret_va
                                            id = id,
                                            method = method,
                                            ret_quantiles = ret_quantiles,
-                                           ret_quantiles = ret_values,
+                                           ret_values = ret_values,
                                            weighting_scheme = weighting_scheme,
                                            ...),
                by = group_by]
@@ -45,28 +45,9 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, ret_va
 #' export
 calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, ret_values, weighting_scheme = "equal", ...){
   with(list(...),{
-  data <- prep_input_data(quant, val, id)
-  method_fn <- ifelse(method == "LOP", LOP, vincent)
-  if(nrow(data) == 0){return(NA)}
-  if(anyNA(ret_values)){
-  if(weighting_scheme == "equal"){
-    agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values)
-  }
-  else if (weighting_scheme == "user_defined"){
-    agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values, weight_fn = user_specified_weights, ...)
-  }
-  else{
-    parse <- parse_trim_input(weighting_scheme)
-    if(parse[1] == "cdf"){
-      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
-    }
-    else{
-      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values, weight_fn = mean_trim, trim_type = parse[2], n_trim)
-    }
-  }
-  return(data.frame(quantile = ret_quantiles, value = agg))}
-  
-  else{
+    data <- prep_input_data(quant, val, id)
+    method_fn <- ifelse(method == "LOP", LOP, vincent)
+    if(nrow(data) == 0){return(NA)}
     if(weighting_scheme == "equal"){
       agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values)
     }
@@ -82,7 +63,7 @@ calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, re
         agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values, weight_fn = mean_trim, trim_type = parse[2], n_trim)
       }
     }
-    return(data.frame(quantile = agg, value = ret_values))}
+    return(agg)
   })
 }
 

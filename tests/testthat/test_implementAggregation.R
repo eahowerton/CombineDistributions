@@ -18,8 +18,9 @@ test_that("Test calculate_single_aggregate(): no trim vinc",{
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "vincent", ret_quantiles = quant)
-  expected <- data.frame(quantile = quant, value = quant * 2)
+                                     method = "vincent", ret_quantiles = quant,
+                                     ret_values = NA)
+  expected <- tibble(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
 
@@ -29,8 +30,9 @@ test_that("Test calculate_single_aggregate(): no trim LOP",{
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "LOP", ret_quantiles = quant)
-  expected <- data.frame(quantile = quant, value = quant * 2)
+                                     method = "LOP", ret_quantiles = quant,
+                                     ret_values = NA)
+  expected <- tibble(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
 
@@ -41,8 +43,9 @@ test_that("Test calculate_single_aggregate(): no trim LOP, different ret_quant",
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "LOP", ret_quantiles = ret_quant)
-  expected <- data.frame(quantile = ret_quant, value = ret_quant * 2)
+                                     method = "LOP", ret_quantiles = ret_quant,
+                                     ret_values = NA)
+  expected <- tibble(quantile = ret_quant, value = ret_quant * 2)
   expect_equal(test, expected)
 })
 
@@ -53,8 +56,9 @@ test_that("Test calculate_single_aggregate(): mean interior trim vinc",{
   d$value <- ifelse(d$model == "A", d$quantile * 2, ifelse(d$model == "B", d$quantile * 3, d$quantile * 5))
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
                                      method = "vincent", ret_quantiles = quant,
+                                     ret_values = NA,
                                      weighting_scheme = "mean_interior", n_trim = 1)
-  expected <- data.frame(quantile = quant, value = quant * 3.5)
+  expected <- tibble(quantile = quant, value = quant * 3.5)
   expect_equal(test, expected)
 })
 
@@ -64,8 +68,9 @@ test_that("Test calculate_single_aggregate(): odd quantiles",{
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "vincent", ret_quantiles = c(0.1,0.33,0.7))
-  expected <- data.frame(quantile = c(0.1,0.33,0.7), value = c(0.1,0.33,0.7) * 2)
+                                     method = "vincent", ret_quantiles = c(0.1,0.33,0.7),
+                                     ret_values = NA)
+  expected <- tibble(quantile = c(0.1,0.33,0.7), value = c(0.1,0.33,0.7) * 2)
   expect_equal(test, expected)
 })
 
@@ -79,9 +84,11 @@ test_that("Test calculate_single_aggregate(): user defined weights",{
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
                                      method = "vincent",
                                      ret_quantiles = quant,
+                                     ret_values = NA,
                                      weighting_scheme = "user_defined",
                                      weights = weights)
-  expected <- data.frame(d %>% filter(model == "A") %>% select(quantile, value))
+  expected <- tibble(d %>% filter(model == "A") %>% select(quantile, value))
+  attr(expected, 'out.attrs') = NULL # remove attributes from expected
   expect_equal(test, expected)
 })
 
