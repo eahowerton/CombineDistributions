@@ -6,7 +6,7 @@
 #'
 #' @param quantile vector containing quantiles for all cdfs to be aggregated
 #' @param value vector containing values for all cdfs to be aggregated
-#' @param id vector containing unqiue ids to distinguish cdf to be aggregated
+#' @param id vector containing unique ids to distinguish cdf to be aggregated
 #' @param ret_quantiles vector of quantiles to return specifying the aggregate distribution
 #' @param ret_values vector of values to return specifying the aggregate distribution
 #' @param weight_fn function? specifying how to weight each model *FIX
@@ -33,7 +33,7 @@ LOP <- function(quantile, value, id, ret_quantiles, ret_values, weight_fn = equa
   df_weighted <- weight_fn(df_long, ...)
   df_weighted <- remove_zero_weights(df_weighted)
   df_agg <- calculate_aggregate_LOP(df_weighted, ret_quantiles, ret_values)
-  return(df_agg$value)
+  return(df_agg)
 }
 
 #### HELPERS ####

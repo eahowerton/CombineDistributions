@@ -18,7 +18,9 @@ test_that("Test LOP: single CDF uniform",{
   d <- expand.grid(id = c("A"),
                    quantile = quant)
   d$value <-  3*d$quantile
-  expect_equal(LOP(d$quantile, d$value, d$id, quant), 3*quant)
+  expected <- tibble(quantile = quant,
+                     value = 3*quant)
+  expect_equal(LOP(d$quantile, d$value, d$id, quant, NA), expected)
 })
 
 test_that("Test calculate_aggregate_LOP: multiple CDF uniform",{
@@ -27,8 +29,9 @@ test_that("Test calculate_aggregate_LOP: multiple CDF uniform",{
                    quantile = quant)
   d$min <- ifelse(d$id == "A", 0, 1)
   d <- d %>% mutate(value = qunif(d$quantile, d$min, d$min + 2)) %>% select(-min)
-  test <- LOP(d$quantile, d$value, d$id, quant)
-  expected <- c(seq(0,1,0.04),seq(1.02,2,0.02), seq(2.04,3,0.04))
+  test <- LOP(d$quantile, d$value, d$id, quant, NA)
+  expected <- tibble(quantile = quant,
+                     value = c(seq(0,1,0.04),seq(1.02,2,0.02), seq(2.04,3,0.04)))
   expect_equal(test, expected)
 })
 
@@ -38,8 +41,9 @@ test_that("Test LOP: single CDF normal",{
   d <- expand.grid(id = c("A"),
                    quantile = quant)
   d$value <-  qnorm(d$quantile)
-  expected <- qnorm(quant)
-  test <- LOP(d$quantile, d$value, d$id, quant)
+  expected <- tibble(quantile = quant,
+                     value = qnorm(quant))
+  test <- LOP(d$quantile, d$value, d$id, quant, NA)
   # check output content
   expect_true(all(abs(test[c(-1,-length(test))] - expected[c(-1,-length(test))]) < eps))
 })
@@ -50,8 +54,9 @@ test_that("Test LOP: same distribution",{
   d <- expand.grid(id = c("A","B"),
                    quantile = quant)
   d$value <- qnorm(d$quantile)
-  expected <- qnorm(quant)
-  test <- LOP(d$quantile, d$value, d$id, quant)
+  expected <- tibble(quantile = quant,
+                     value = qnorm(quant))
+  test <- LOP(d$quantile, d$value, d$id, quant, NA)
   expect_true(all(abs(test[c(-1,- length(test))] - expected[c(-1,- length(test))]) < eps))
 })
 
@@ -62,8 +67,9 @@ test_that("Test LOP: cdf_trim",{
                    quantile = quant)
   d$mean <- ifelse(d$id == "A", -1, ifelse(d$id == "B",0,1))
   d <- d %>% mutate(value = qnorm(d$quantile,d$mean, 1)) %>% select(-mean)
-  expected <- qnorm(quant)
-  test <- LOP(d$quantile, d$value, d$id, quant,
+  expected <- tibble(quantile = quant,
+                     value = qnorm(quant))
+  test <- LOP(d$quantile, d$value, d$id, quant, NA,
               weight_fn = cdf_trim, n_trim = 2, trim_type = "exterior", avg_dir = "LOP")
   expect_true(all(abs(test[c(-1,- length(test))] - expected[c(-1,- length(test))]) < eps))
 })
@@ -75,8 +81,9 @@ test_that("Test LOP: mean_trim",{
                    quantile = quant)
   d$mean <- ifelse(d$id == "A", -1, ifelse(d$id == "B",0,1))
   d <- d %>% mutate(value = qnorm(d$quantile,d$mean, 1)) %>% select(-mean)
-  expected <- qnorm(quant)
-  test <- LOP(d$quantile, d$value, d$id, quant,
+  expected <- tibble(quantile = quant,
+                     value = qnorm(quant))
+  test <- LOP(d$quantile, d$value, d$id, quant, NA,
               weight_fn = mean_trim, n_trim = 2, trim_type = "exterior")
   expect_true(all(abs(test[c(-1,- length(test))] - expected[c(-1,- length(test))]) < eps))
 })
@@ -88,8 +95,8 @@ test_that("Test LOP: same mean",{
                    quantile = quant)
   d$sd <- ifelse(d$id == "A", 0.5, ifelse(d$id == "B",1,2))
   d <- d %>% mutate(value = qnorm(d$quantile,0, d$sd)) %>% select(-sd)
-  test <- LOP(d$quantile, d$value, d$id, quant)
-  test <- test[!is.na(test)]
+  test <- LOP(d$quantile, d$value, d$id, quant, NA)$value
+  #test <- test[!is.na(test)]
   test_mean <- sapply(1:(length(test)-1),
                       function(i){((test[i]+test[i+1])/2)*((quant[i+1]-quant[i]))})
   test_mean <- sum(test_mean)
@@ -104,10 +111,26 @@ test_that("Test LOP: return different quantiles",{
   d <- expand.grid(id = c("A"),
                    quantile = quant)
   d$value <-  qnorm(d$quantile)
-  expected <- qnorm(ret_quant)
-  test <- LOP(d$quantile, d$value, d$id, ret_quant)
+  expected <- tibble(quantile = ret_quant,
+                     value = qnorm(ret_quant))
+  test <- LOP(d$quantile, d$value, d$id, ret_quant, NA)
   expect_true(all(abs(test[c(-1,- length(test))] - expected[c(-1,- length(test))]) < eps))
 })
+
+
+test_that("Test LOP: return different values",{
+  eps <- 0.001
+  vals <- seq(0,100,20)
+  ret_val <- c(25,50,75)
+  d <- expand.grid(id = c("A"),
+                   value = vals)
+  d$quantile <- d$value/100
+  expected <- tibble(quantile = ret_val/100,
+                     value = ret_val)
+  test <- LOP(d$quantile, d$value, d$id, NA, ret_val)
+  expect_equal(test, expected)
+})
+
 
 # test_that("Test calculate_aggregate_LOP: real world SEJ?",{
 #
@@ -138,4 +161,5 @@ test_that("Test avg_probs()",{
                      quantile = c(0.25,0.75,1))
   expect_identical(avg_probs(df_cdfs), expected)
 })
+
 
