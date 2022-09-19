@@ -75,3 +75,5 @@ avg_probs <- function(df_cdfs){
     dplyr::summarise(quantile = weighted.mean(quantile, weight))
   return(gdf_cdf)
 }
+
+
