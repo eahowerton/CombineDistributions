@@ -27,7 +27,7 @@
 #'   (additional input `weights` that is a data.frame containing `id` and `weight` columns)
 #'   3. trimming - "cdf_interior", "cdf_exterior",
 #'   "mean_interior", "mean_exterior", following REF (additional inputs ...)
-aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, ret_values, weighting_scheme = "equal", ...){
+aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, ret_values = NA, weighting_scheme = "equal", ...){
   data <- update_id_var_col(data, id_var)
   data.table::setDT(data)
   aggs <- data[,calculate_single_aggregate(quant = quantile,
