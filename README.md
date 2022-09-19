@@ -17,9 +17,16 @@ All code is licensed under the CC-BY-NC Creative Commons attribution-noncommerci
 You can install the released version of CombineDistributions from GitHub with:
 
 ``` r
-remotes::install_github("eahowerton/CombineDistributions", upgrade = "never")
+remotes::install_github("eahowerton/CombineDistributions")
 ```
+## Vignettes
+Please reference our vignettes to see examples of the functionality in `CombineDistributions`. 
 
+1. Introduction to `CombineDistributions`: this vignette provides an overview of the aggregation methods available and how to implement them.
+
+2. Aggregating predictions from an SIRS mdoel: this vignette illustrates a simple simulation case study, where we simulate a multi-model prediction effort and compare aggregation methods in this controlled environment. 
+
+3. Aggregation and trimming on real-world COVID-19 death predictions: this vignette aggregates projections on COVID-19 deaths from 17 distinct epidemiological models, including varying the aggregation approach and the weighting scheme.
 
 ## References
 Jose, Victor Richmond R., Yael Grushka-Cockayne, and Kenneth C. Lichtendahl. 2014. “Trimmed Opinion Pools and the Crowd’s Calibration Problem.” Management Science 60 (2): 463–75. https://doi.org/10.1287/mnsc.2013.1781.
