@@ -18,7 +18,8 @@ test_that("Test calculate_single_aggregate(): no trim vinc",{
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "vincent", ret_quantiles = quant)
+                                     method = "vincent", ret_quantiles = quant,
+                                     reorder_quantiles = FALSE)
   expected <- data.frame(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
@@ -29,7 +30,8 @@ test_that("Test calculate_single_aggregate(): no trim LOP",{
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "LOP", ret_quantiles = quant)
+                                     method = "LOP", ret_quantiles = quant,
+                                     reorder_quantiles = FALSE)
   expected <- data.frame(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
@@ -41,7 +43,8 @@ test_that("Test calculate_single_aggregate(): no trim LOP, different ret_quant",
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "LOP", ret_quantiles = ret_quant)
+                                     method = "LOP", ret_quantiles = ret_quant,
+                                     reorder_quantiles = FALSE)
   expected <- data.frame(quantile = ret_quant, value = ret_quant * 2)
   expect_equal(test, expected)
 })
@@ -53,7 +56,8 @@ test_that("Test calculate_single_aggregate(): mean interior trim vinc",{
   d$value <- ifelse(d$model == "A", d$quantile * 2, ifelse(d$model == "B", d$quantile * 3, d$quantile * 5))
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
                                      method = "vincent", ret_quantiles = quant,
-                                     weighting_scheme = "mean_interior", n_trim = 1)
+                                     weighting_scheme = "mean_interior", n_trim = 1,
+                                     reorder_quantiles = FALSE)
   expected <- data.frame(quantile = quant, value = quant * 3.5)
   expect_equal(test, expected)
 })
@@ -64,8 +68,22 @@ test_that("Test calculate_single_aggregate(): odd quantiles",{
                    quantile = quant)
   d$value <- d$quantile *2
   test <- calculate_single_aggregate(d$quantile, d$value, d$model,
-                                     method = "vincent", ret_quantiles = c(0.1,0.33,0.7))
+                                     method = "vincent", ret_quantiles = c(0.1,0.33,0.7),
+                                     reorder_quantiles = FALSE)
   expected <- data.frame(quantile = c(0.1,0.33,0.7), value = c(0.1,0.33,0.7) * 2)
+  expect_equal(test, expected)
+})
+
+test_that("Test calculate_single_aggregate(): no trim LOP, unordered quantiles",{
+  quant <- seq(0,1,0.5)
+  d <- expand.grid(model = c("A","B"),
+                   quantile = quant)
+  d$value <- d$quantile *2
+  d <- d[c(6,2,4,3,5,1),]
+  test <- calculate_single_aggregate(d$quantile, d$value, d$model,
+                                     method = "LOP", ret_quantiles = quant,
+                                     reorder_quantiles = TRUE)
+  expected <- data.frame(quantile = quant, value = quant * 2)
   expect_equal(test, expected)
 })
 
@@ -80,7 +98,8 @@ test_that("Test calculate_single_aggregate(): user defined weights",{
                                      method = "vincent",
                                      ret_quantiles = quant,
                                      weighting_scheme = "user_defined",
-                                     weights = weights)
+                                     weights = weights,
+                                     reorder_quantiles = FALSE)
   expected <- data.frame(d %>% filter(model == "A") %>% select(quantile, value))
   expect_equal(test, expected)
 })
@@ -101,9 +120,20 @@ test_that("Test prep_input_data(): NA vals",{
                    quantile = seq(0,1,0.5))
   d$value <- d$quantile *2
   d[1,3] = NA
-  expect_warning(prep_input_data(d$quantile, d$value, d$id))
-  test = suppressWarnings(prep_input_data(d$quantile, d$value, d$id))
+  expect_warning(prep_input_data(d$quantile, d$value, d$id, reorder_quantiles = FALSE))
+  test = suppressWarnings(prep_input_data(d$quantile, d$value, d$id, reorder_quantiles = FALSE))
   expect_equal(as.matrix(test), as.matrix(d %>% filter(id != "A")))
+})
+
+test_that("Test prep_input_data(): non-ordered quantiles",{
+  d <- expand.grid(id = c("A","B"),
+                   quantile = seq(0,1,0.5))
+  d$value <- d$quantile *2
+  d <- d[c(6,2,4,3,5,1),]
+  test = prep_input_data(d$quantile, d$value, d$id, reorder_quantiles = TRUE)
+  expected = setDT(d[order(d$id, d$quantile),])
+  attributes(expected) = attributes(test)
+  expect_equal(test, expected)
 })
 
 test_that("Test filter_input_data(): non-monotonic",{
@@ -111,8 +141,8 @@ test_that("Test filter_input_data(): non-monotonic",{
                    quantile = seq(0,1,0.5))
   d$value <- d$quantile *2
   d[1,3] = NA
-  expect_warning(prep_input_data(d$quantile, d$value, d$id))
-  test = suppressWarnings(prep_input_data(d$quantile, d$value, d$id))
+  expect_warning(prep_input_data(d$quantile, d$value, d$id, reorder_quantiles = FALSE))
+  test = suppressWarnings(prep_input_data(d$quantile, d$value, d$id, reorder_quantiles = FALSE))
   expect_equal(as.matrix(test), as.matrix(d %>% filter(id != "A")))
 })
 
@@ -122,8 +152,8 @@ test_that("Test filter_input_data(): multiple",{
   d$value <- ifelse(d$id == "A", d$quantile, d$quantile*2)
   d$value[d$id == "A" & d$quantile == 0.5] = 2
   d[nrow(d),3] = NA
-  expect_warning(prep_input_data(d$quantile, d$value, d$id))
-  test = suppressWarnings(prep_input_data(d$quantile, d$value, d$id))
+  expect_warning(prep_input_data(d$quantile, d$value, d$id, reorder_quantiles = FALSE))
+  test = suppressWarnings(prep_input_data(d$quantile, d$value, d$id, reorder_quantiles = FALSE))
   expect_equal(as.matrix(test), as.matrix(d %>% filter(id == "B")))
 })
 

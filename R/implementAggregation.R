@@ -11,6 +11,8 @@
 #' @param group_by vector containing the names of the columns to create unique aggregates for
 #' @param method character name of the method for aggregation (see details).
 #' @param weighting_scheme string to indicate how to weight in the aggregate (see details).
+#' @param reorder_quantiles TRUE to ensure that quantiles are ordered;
+#'   set to FALSE if quantiles in data are already ordered (increasing)
 #' @param n_trim integer denoting the number of models to trim
 #'
 #' @return TBD
@@ -27,7 +29,7 @@
 #'   (additional input `weights` that is a data.frame containing `id` and `weight` columns)
 #'   3. trimming - "cdf_interior", "cdf_exterior",
 #'   "mean_interior", "mean_exterior", following REF (additional inputs ...)
-aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, weighting_scheme = "equal", ...){
+aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, weighting_scheme = "equal", reorder_quantiles = TRUE, ...){
   data <- update_id_var_col(data, id_var)
   data.table::setDT(data)
   aggs <- data[,calculate_single_aggregate(quant = quantile,
@@ -36,15 +38,16 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, weight
                                            method = method,
                                            ret_quantiles = ret_quantiles,
                                            weighting_scheme = weighting_scheme,
+                                           reorder_quantiles = reorder_quantiles,
                                            ...),
                by = group_by]
   return(aggs)
 }
 
 #' export
-calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, weighting_scheme = "equal", ...){
+calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, weighting_scheme = "equal", reorder_quantiles, ...){
   with(list(...),{
-  data <- prep_input_data(quant, val, id)
+  data <- prep_input_data(quant, val, id, reorder_quantiles)
   method_fn <- ifelse(method == "LOP", LOP, vincent)
   if(nrow(data) == 0){return(NA)}
   if(weighting_scheme == "equal"){
@@ -68,8 +71,11 @@ calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, we
 
 
 #### PREP INPUT DATA ####
-prep_input_data <- function(quant_col, val_col, id_col){
+prep_input_data <- function(quant_col, val_col, id_col, reorder_quantiles){
   data <- data.table::data.table(id = id_col, quantile = quant_col, value = val_col)
+  if(reorder_quantiles){
+    data <- data[order(id, quantile)]
+  }
   rm_na <- check_na_vals(data)
   data <- data[!(id %in% rm_na$id)]
   rm_nonmono <- check_monotonic(data)
