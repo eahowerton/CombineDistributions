@@ -201,8 +201,6 @@ all_params$sim = 1:nrow(all_params)
 Here are the distributions of parameters for each model:
 ```{r plot-params, echo = FALSE}
 p_params <- all_params %>%
-  mutate(R0 = beta/gamma, 
-         model = paste("model", model)) %>%
   reshape2::melt(c("model", "struc_uncert", "sim")) %>%
   filter(variable != "rho", struc_uncert == "none") %>% # only need one struc scenario because all the same
   ggplot(aes(x = value, color = model)) + 
