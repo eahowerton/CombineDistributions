@@ -578,20 +578,17 @@ We use the continuous rank probability score (CRPS) [@matheson_scoring_1976-1] t
 ```{r crps}
 # define function to implement CRPS 
 # assume piecewise linear cdf, jumps to 0/1 after last defined quantile
-CRPS <- function(q,v,o,rule=2){
+CRPS <- function(q,v,o){
   # add o into v to calculate area under curve
   v <- sort(c(v, o))
   # find integral cutoff where v = o
   vl <- max(which(v == o))
+  # assume values outside the define set of values and quantiles are 0 or 1 (jump)
   if(vl == 1){
     q <- c(0,q)
-    areas_1 <- (v[2] - v[1])
-    areas_2 <- trapz(v[-1], (q[-1]-1)^2)
   }
   else if (vl == length(v)){
     q <- c(q,1)
-    areas_1 <- trapz(v[-length(q)], q[-length(q)]^2)
-    areas_2 <- v[length(v)] - v[length(v)-1]
   }
   else{
     # add q_o into q to calculate area under curve
@@ -600,10 +597,10 @@ CRPS <- function(q,v,o,rule=2){
     q_o <- q[vl-1] + ((q[vl+1] - q[vl-1])/(v[vl+1] - v[vl-1]))*(o - v[vl-1])
     # add q_o into q to calculate area under curve
     q[vl] <- q_o
-    # calculate area of each trapezoid using CRPS formula for each subset
-    areas_1 <- trapz(v[1:vl], q[1:vl]^2)
-    areas_2 <- trapz(v[vl:length(v)], (q[vl:length(v)]-1)^2)
   }
+  # calculate area of each trapezoid using CRPS formula for each subset
+  areas_1 <- trapz(v[1:vl], q[1:vl]^2)
+  areas_2 <- trapz(v[vl:length(v)], (q[vl:length(v)]-1)^2)
   # return sum of areas
   return(sum(c(areas_1, areas_2)))
 }
