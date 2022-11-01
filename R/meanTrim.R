@@ -27,7 +27,7 @@ approx_cdf_mean <- function(df_cdf){
 
 find_mean_trim_ids <- function(dat, keep_vals){
   means <- sapply(unique(dat$id),
-                  function(i){m <- approx_cdf_mean(dat %>% filter(id == i));
+                  function(i){m <- approx_cdf_mean(dat %>% dplyr::filter(id == i));
                   return(list(data.frame(id = i, m)))})
   means <- do.call(rbind, means)
   trim_ids <- means %>% dplyr::arrange(m)
