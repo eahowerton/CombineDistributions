@@ -6,20 +6,21 @@
 #'
 #' @param quantile vector containing quantiles for all cdfs to be aggregated
 #' @param value vector containing values for all cdfs to be aggregated
-#' @param id vector containing unqiue ids to distinguish cdf to be aggregated
+#' @param id vector containing unique ids to distinguish cdf to be aggregated
 #' @param ret_quantiles vector of quantiles to return specifying the aggregate distribution
+#' @param ret_values vector of values to return specifying the aggregate distribution
 #' @param weight_fn function? specifying how to weight each model *FIX
 #'
 #' @return vector of values for corresponding \code{ret_quantiles} of aggregate distribution
 #'
 #' @examples
 #' dat <- expand.grid(id = c("A", "B"),
-#'                    quantile = seq(0,1,0.01))
+#'                    quantile = seq(0,1,0.01)),
 #' dat$value <- ifelse(dat$id == "A", qnorm(dat$quantile), qnorm(dat$quantile, 0,2))
-#' LOP(dat$quantile, dat$value, dat$id, seq(0,1,0.05))
+#' LOP(dat$quantile, dat$value, dat$id, seq(0,1,0.05), NA)
 #'
 #' @export
-LOP <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...){
+LOP <- function(quantile, value, id, ret_quantiles, ret_values, weight_fn = equal_weights, ...){
   # find min/max values across all teams (used as min/max values for agg cdf)
   vals <- unique(value)
   if(length(vals)>1000){
@@ -31,15 +32,15 @@ LOP <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, .
   df_long <- evaluate_cdf(quantile, value, id, vals)
   df_weighted <- weight_fn(df_long, ...)
   df_weighted <- remove_zero_weights(df_weighted)
-  df_agg <- calculate_aggregate_LOP(df_weighted, ret_quantiles)
-  return(df_agg$value)
+  df_agg <- calculate_aggregate_LOP(df_weighted, ret_quantiles, ret_values)
+  return(df_agg)
 }
 
 #### HELPERS ####
 #' @export
-calculate_aggregate_LOP <- function(data, ret_quantiles){ #model_weights
+calculate_aggregate_LOP <- function(data, ret_quantiles, ret_values){ #model_weights
   df_cdfs <- avg_probs(data)
-  agg <- return_specified_quantiles(df_cdfs, ret_quantiles)
+  agg <- return_specified_quantiles(df_cdfs, ret_quantiles, ret_values)
   return(agg)
 }
 
@@ -74,4 +75,3 @@ avg_probs <- function(df_cdfs){
     dplyr::summarise(quantile = weighted.mean(quantile, weight))
   return(gdf_cdf)
 }
-

@@ -29,18 +29,36 @@ check_weights_df <- function(weights){
   return(weights)
 }
 
-return_specified_quantiles <- function(data, ret_quantiles){
+## modified function with the ret_values
+return_specified_quantiles <- function(data, ret_quantiles, ret_values){
   data <- rm_duplicates(data)
-  if(length(unique(data$value)) == 1){
-    data_return <- tibble::tibble(quantile = ret_quantiles,
-                                  value = unique(data$value))
+  if(anyNA(ret_values)){
+    if(length(unique(data$value)) == 1){
+      data_return <- tibble::tibble(quantile = ret_quantiles,
+                                    value = unique(data$value))
+    }
+    else{
+      data_interp <- approx(data$quantile, data$value, xout = ret_quantiles, ties = "mean", rule = 2)
+      data_return <- tibble::tibble(quantile = data_interp$x,
+                                    value = data_interp$y)
+    }
+    return(data_return)
   }
   else{
-    data_interp <- approx(data$quantile, data$value, xout = ret_quantiles, ties = "mean", rule = 2)
-    data_return <- tibble::tibble(quantile = data_interp$x,
-                                  value = data_interp$y)
+    if(length(unique(data$value)) == 1){
+      data_return <- tibble::tibble(quantile = unique(data$quantile),
+                                    value = ret_values)
+    }
+    else{
+      # add points on either side of the cdf to help with interpolation
+      data <- bind_rows(data, data.frame(quantile = c(0,1),
+                                         value = c(min(data$value), max(data$value))))
+      data_interp <- approx(data$value, data$quantile, xout = ret_values, ties = "mean", rule = 2)
+      data_return <- tibble::tibble(quantile = data_interp$y,
+                                    value = data_interp$x)
+    }
+    return(data_return)
   }
-  return(data_return)
 }
 
 rm_duplicates <- function(data){

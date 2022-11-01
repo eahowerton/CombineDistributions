@@ -51,22 +51,43 @@ test_that("Test user_specified_weights()",{
   expect_error(user_specified_weights(d, weights))
 })
 
-test_that("Test return_specified_quantiles",{
+test_that("Test return_specified_quantiles quantiles",{
   d <- data.frame(value = seq(0,100,1))
   d$quantile <- d$value/100
   ret_quantile <- seq(0,1,0.05)
   expected <- tibble(quantile = ret_quantile,
                          value  = ret_quantile*100)
   # check keep
-  expect_equal(return_specified_quantiles(d, ret_quantile), expected)
+  expect_equal(return_specified_quantiles(d, ret_quantile, NA), expected)
 })
 
-test_that("Test return_specified_quantiles: interpolate",{
+test_that("Test return_specified_quantiles: interpolate quantiles",{
   d <- data.frame(value = seq(0,100,10))
   d$quantile <- d$value/100
   ret_quantile <- seq(0,1,0.05)
   expected <- tibble(quantile = ret_quantile,
                      value  = ret_quantile*100)
   # check keep
-  expect_equal(return_specified_quantiles(d, ret_quantile), expected)
+  expect_equal(return_specified_quantiles(d, ret_quantile, NA), expected)
 })
+
+test_that("Test return_specified_quantiles values",{
+  d <- data.frame(value = seq(0,100,1))
+  d$quantile <- d$value/100
+  ret_value <- seq(0,100,5)
+  expected <- tibble(quantile = ret_value/100,
+                     value  = ret_value)
+  # check keep
+  expect_equal(return_specified_quantiles(d, ret_quantiles = NA, ret_values = ret_value), expected)
+})
+
+test_that("Test return_specified_quantiles interpolate values",{
+  d <- data.frame(value = seq(0,100,10))
+  d$quantile <- d$value/100
+  ret_value <- seq(0,100,5)
+  expected <- tibble(quantile = ret_value/100,
+                     value  = ret_value)
+  # check keep
+  expect_equal(return_specified_quantiles(d, ret_quantiles = NA, ret_values = ret_value), expected)
+})
+

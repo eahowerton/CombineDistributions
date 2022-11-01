@@ -29,7 +29,8 @@
 #'   (additional input `weights` that is a data.frame containing `id` and `weight` columns)
 #'   3. trimming - "cdf_interior", "cdf_exterior",
 #'   "mean_interior", "mean_exterior", following REF (additional inputs ...)
-aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, weighting_scheme = "equal", reorder_quantiles = TRUE, ...){
+aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, ret_values = NA,
+                           weighting_scheme = "equal", reorder_quantiles = TRUE, ...){
   data <- update_id_var_col(data, id_var)
   data.table::setDT(data)
   aggs <- data[,calculate_single_aggregate(quant = quantile,
@@ -37,6 +38,7 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, weight
                                            id = id,
                                            method = method,
                                            ret_quantiles = ret_quantiles,
+                                           ret_values = ret_values,
                                            weighting_scheme = weighting_scheme,
                                            reorder_quantiles = reorder_quantiles,
                                            ...),
@@ -45,30 +47,30 @@ aggregate_cdfs <- function(data, id_var, group_by, method, ret_quantiles, weight
 }
 
 #' export
-calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, weighting_scheme = "equal", reorder_quantiles, ...){
+calculate_single_aggregate <- function(quant, val, id, method, ret_quantiles, ret_values,
+                                       weighting_scheme = "equal", reorder_quantiles, ...){
   with(list(...),{
-  data <- prep_input_data(quant, val, id, reorder_quantiles)
-  method_fn <- ifelse(method == "LOP", LOP, vincent)
-  if(nrow(data) == 0){return(NA)}
-  if(weighting_scheme == "equal"){
-    agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles)
-  }
-  else if (weighting_scheme == "user_defined"){
-    agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, weight_fn = user_specified_weights, ...)
-  }
-  else{
-    parse <- parse_trim_input(weighting_scheme)
-    if(parse[1] == "cdf"){
-      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
+    data <- prep_input_data(quant, val, id, reorder_quantiles)
+    method_fn <- ifelse(method == "LOP", LOP, vincent)
+    if(nrow(data) == 0){return(NA)}
+    if(weighting_scheme == "equal"){
+      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values)
+    }
+    else if (weighting_scheme == "user_defined"){
+      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values, weight_fn = user_specified_weights, ...)
     }
     else{
-      agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, weight_fn = mean_trim, trim_type = parse[2], n_trim)
+      parse <- parse_trim_input(weighting_scheme)
+      if(parse[1] == "cdf"){
+        agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values, weight_fn = cdf_trim, trim_type = parse[2], n_trim, avg_dir = method)
+      }
+      else{
+        agg <- method_fn(data$quantile, data$value, data$id, ret_quantiles, ret_values, weight_fn = mean_trim, trim_type = parse[2], n_trim)
+      }
     }
-  }
-  return(data.frame(quantile = ret_quantiles, value = agg))
+    return(agg)
   })
 }
-
 
 #### PREP INPUT DATA ####
 prep_input_data <- function(quant_col, val_col, id_col, reorder_quantiles){

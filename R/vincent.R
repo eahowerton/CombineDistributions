@@ -14,7 +14,8 @@
 #' vincent(dat$quantile, dat$value, dat$id, seq(0,1,0.05))
 #'
 #' @export
-vincent <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weights, ...){
+vincent <- function(quantile, value, id, ret_quantiles, ret_values,
+                    weight_fn = equal_weights, ...){
   data = data.table::data.table(id = id, quantile = quantile, value = value)
   # interpolate individual cdfs to same quantiles
   quants <- unique(quantile)
@@ -26,17 +27,17 @@ vincent <- function(quantile, value, id, ret_quantiles, weight_fn = equal_weight
   df_long <- evaluate_qf(quantile, value, id, quants)
   df_weighted <- weight_fn(df_long, ...)
   df_weighted <- remove_zero_weights(df_weighted)
-  df_agg <- calculate_aggregate_vin(df_weighted, ret_quantiles)
-  return(df_agg$value)
+  df_agg <- calculate_aggregate_vin(df_weighted, ret_quantiles, ret_values)
+  return(df_agg)
 }
 
-calculate_aggregate_vin <- function(data, ret_quantiles){ #model_weights
+calculate_aggregate_vin <- function(data, ret_quantiles, ret_values){ #model_weights
   #dat <- left_join(dat, model_weights)
   # calculate vincent average
   vinc <- data %>%
     dplyr::group_by(quantile) %>%
     dplyr::summarise(value= weighted.mean(value, weight))
-  vinc_agg <- return_specified_quantiles(vinc, ret_quantiles)
+  vinc_agg <- return_specified_quantiles(vinc, ret_quantiles, ret_values)
   return(vinc_agg)
 }
 
