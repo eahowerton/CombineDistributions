@@ -201,8 +201,6 @@ all_params$sim = 1:nrow(all_params)
 Here are the distributions of parameters for each model:
 ```{r plot-params, echo = FALSE}
 p_params <- all_params %>%
-  mutate(R0 = beta/gamma, 
-         model = paste("model", model)) %>%
   reshape2::melt(c("model", "struc_uncert", "sim")) %>%
   filter(variable != "rho", struc_uncert == "none") %>% # only need one struc scenario because all the same
   ggplot(aes(x = value, color = model)) + 
@@ -266,7 +264,8 @@ names(labs_struc) <- c("none", "btn", "win")
 ub_labs <- list(bquote(mu[beta]==.(m1_beta)),
                 bquote(mu[beta]==.(m2_beta)),
                 bquote(mu[beta]==.(m3_beta)),
-                bquote(mu[beta]==.(m4_beta)))
+                bquote(mu[beta]==.(m4_beta)), 
+                bquote(mu[beta]==.(2.4)))
 
   
 labs_struc_simp = c("bold(not~represented)",
@@ -291,7 +290,7 @@ model_labs <- c(paste0("A:mu[beta]==",m1_beta,"~', '*rho==0"),
                 paste0("D:mu[beta]==",m4_beta,"~', '*rho==0*' or '*1/26"))
 
 # define colors
-colrs_mod = rev(paste0("grey",round( seq(0.15, 0.85, length.out = 4),2)*100))
+colrs_mod = rev(paste0("grey",round( seq(0.15, 0.85, length.out = 5),2)*100))
 ```
 
 ## Individual model projections
@@ -381,7 +380,7 @@ pdfs <- setDT(out$metrics)[,.(x = density(value, adjust = 2)$x, y = density(valu
 
 We plot the distribution of outcomes for individual model projections across the three uncertainty scenarios. 
 
-```{r plot-model-projections, fig.width=6, fig.height = 2.25, echo = FALSE}
+```{r plot-model-projections, fig.width=8, fig.height = 2.25, echo = FALSE}
 # reorder factor 
 pdfs$struc_uncert <- factor(pdfs$struc_uncert, levels = c("none", "btn", "win"))
 pdfs$variable <- factor(pdfs$variable, levels = c("cum_cases", "peak_cases"))
@@ -439,7 +438,7 @@ agg_pdfs <- agg_cdfs[, .(samps = approx(quantile, value, runif(100000))$y),
 
 We plot the resulting aggregate distributions. 
 
-```{r plot-aggs, fig.width=6, fig.height = 2.25, echo = FALSE}
+```{r plot-aggs, fig.width=8, fig.height = 2.25, echo = FALSE}
 # define aggregate colors
 colrs_agg = c("#377EB8", "#ff7f00")
 
@@ -578,20 +577,17 @@ We use the continuous rank probability score (CRPS) [@matheson_scoring_1976-1] t
 ```{r crps}
 # define function to implement CRPS 
 # assume piecewise linear cdf, jumps to 0/1 after last defined quantile
-CRPS <- function(q,v,o,rule=2){
+CRPS <- function(q,v,o){
   # add o into v to calculate area under curve
   v <- sort(c(v, o))
   # find integral cutoff where v = o
   vl <- max(which(v == o))
+  # assume values outside the define set of values and quantiles are 0 or 1 (jump)
   if(vl == 1){
     q <- c(0,q)
-    areas_1 <- (v[2] - v[1])
-    areas_2 <- trapz(v[-1], (q[-1]-1)^2)
   }
   else if (vl == length(v)){
     q <- c(q,1)
-    areas_1 <- trapz(v[-length(q)], q[-length(q)]^2)
-    areas_2 <- v[length(v)] - v[length(v)-1]
   }
   else{
     # add q_o into q to calculate area under curve
@@ -600,10 +596,10 @@ CRPS <- function(q,v,o,rule=2){
     q_o <- q[vl-1] + ((q[vl+1] - q[vl-1])/(v[vl+1] - v[vl-1]))*(o - v[vl-1])
     # add q_o into q to calculate area under curve
     q[vl] <- q_o
-    # calculate area of each trapezoid using CRPS formula for each subset
-    areas_1 <- trapz(v[1:vl], q[1:vl]^2)
-    areas_2 <- trapz(v[vl:length(v)], (q[vl:length(v)]-1)^2)
   }
+  # calculate area of each trapezoid using CRPS formula for each subset
+  areas_1 <- trapz(v[1:vl], q[1:vl]^2)
+  areas_2 <- trapz(v[vl:length(v)], (q[vl:length(v)]-1)^2)
   # return sum of areas
   return(sum(c(areas_1, areas_2)))
 }
@@ -660,7 +656,7 @@ crps_peak <- scores %>%
 
 And we can show when LOP and Vincent perform better by plotting the difference between CRPS for each. 
 
-```{r plot-CRPS-diff, fig.width = 9, fig.height = 4}
+```{r plot-CRPS-diff, fig.width = 9, fig.height = 4, echo = FALSE}
 crps_diff_cum <- scores %>%
   filter(variable == "cum_cases") %>%
   reshape2::dcast(struc_uncert + obs + obs_num ~ method, value.var = "CRPS") %>%
@@ -798,6 +794,499 @@ p3_peak = scores_all %>%
         strip.placement = "outside")
 ```
 
+## Aggregating with an outlier
+Lastly, we consider the effects of an outlier on the resulting aggregate distributions. 
+We run another set of model simulations with $\mu_\beta = 2.4$. 
+
+```{r outlier-params}
+# define unique beta for each simulation
+outlier_mu_beta <- 2.4
+outlier_beta <- rnorm(n_samples, 
+                      outlier_mu_beta, 
+                      sd = sig_beta
+)
+# verify all transmission rates are positive
+which(beta <= 0)
+
+# define unique recovery rate (gamma) for each simulation
+outlier_recov_time <- rnorm(n_samples, mu_recov_time, sig_recov_time) 
+# verify all recovery times are positive
+which(recov_time <= 0)
+
+
+# create data.frame of parameters for each uncertainty scenario
+# scenario 1: none
+none <- data.frame(beta = outlier_beta, recov_time = outlier_recov_time,
+                   rho = wane_time_unlikely, 
+                   model = "E",
+                   struc_uncert = "none")
+# scenario 2: between
+btn <- data.frame(beta = outlier_beta, recov_time = outlier_recov_time, 
+                  rho = wane_time_unlikely, 
+                  model = "E",
+                  struc_uncert = "btn")
+# scenario 3: within
+win <- data.frame(beta = outlier_beta, recov_time = outlier_recov_time, 
+                  rho = c(rep(wane_time_unlikely, n_samples/2), rep(wane_time_likely, n_samples/2)), 
+                  model = "E",
+                  struc_uncert = "win")
+
+# combine all parameters into one data.frame
+outlier_params <- rbind(none, btn, win)
+# correct any negative parameters and convert to rate
+outlier_params$gamma = with(outlier_params, ifelse(recov_time == 0, 0, 1/recov_time))
+outlier_params <- outlier_params %>% select(-recov_time)
+outlier_params$rho = with(outlier_params, ifelse(rho == 0, 0, 1/rho))
+# add simulation number
+outlier_params$sim = max(all_params$sim) + 1:nrow(outlier_params)
+```
+
+```{r outlier-sims}
+# run the chain binomial model
+outlier_out <- run_cb_sir(T, nrow(outlier_params), init , outlier_params$beta, outlier_params$gamma, outlier_params$rho)
+# reshape outlier_out metrics
+outlier_out$metrics <- outlier_out$metrics %>% 
+  mutate(sim = sim + max(all_params$sim)) %>%
+  left_join(outlier_params)
+# reshape outlier_out time series
+outlier_out$timeseries <- as.data.frame(outlier_out$timeseries[,"I",]) %>%
+  mutate(id = 1:n() + max(all_params$sim)) %>%
+  reshape2::melt("id") %>%
+  rename(time = variable) %>%
+  mutate(time = as.integer(gsub("V","",time)))
+```
+
+We approximate the individual distributions, including the outlier, and plot the distribution of outcomes for individual model projections across the three uncertainty scenarios. 
+
+```{r outlier-calc-individual-dists}
+# convert to long format
+outlier_out$metrics <- reshape2::melt(outlier_out$metrics, c("sim", "beta", "gamma", "rho", "model", "struc_uncert"))
+
+# CDFs
+q <- 1:999/1000
+outlier_cdfs <- setDT(outlier_out$metrics)[,.(value = quantile(value, q), quantile = q), 
+            by = .(model, struc_uncert, variable)]
+
+# PDFs
+outlier_pdfs <- setDT(outlier_out$metrics)[,.(x = density(value, adjust = 2)$x, y = density(value, adjust = 2)$y),
+                   by = .(model, struc_uncert, variable)]
+
+```
+
+```{r outlier-plot-model-projections, fig.width=8, fig.height = 2.25, echo = FALSE}
+# reorder factor 
+pdfs$struc_uncert <- factor(pdfs$struc_uncert, levels = c("none", "btn", "win"))
+pdfs$variable <- factor(pdfs$variable, levels = c("cum_cases", "peak_cases"))
+
+# plot
+p1_cumu_outlier <- bind_rows(pdfs, outlier_pdfs) %>% 
+  filter(variable == "cum_cases") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))) %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_path(aes(color = as.factor(model)), size= 0.5) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  coord_cartesian(xlim = c(0,2000), 
+                  ylim = range(bind_rows(pdfs, outlier_pdfs) %>% filter(variable == "cum_cases") %>% select(y)))+
+  scale_color_manual(values = rev(colrs_mod),
+                     labels = ub_labs) +
+  scale_x_continuous(label = comma, 
+                     name = "cumulative cases") +
+  scale_y_continuous(expand = c(0,0),
+                     name = "individual predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.93,0.8),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank())
+p1_cumu_outlier
+ggsave(paste0(fig_path,"pdfs_scores_cum_outlier.pdf"), p1_cumu_outlier, width = 6, height = 2.5, units = "in")
+
+p1_peak_outlier <- bind_rows(pdfs, outlier_pdfs) %>% 
+  filter(variable == "peak_cases") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))) %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_path(aes(color = as.factor(model)), size= 0.5) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  coord_cartesian(ylim = range(bind_rows(pdfs, outlier_pdfs) %>% filter(variable == "peak_cases") %>% select(y)))+
+  scale_color_manual(values = rev(colrs_mod),
+                     labels = ub_labs) +
+  scale_x_continuous(label = comma, 
+                     name = "peak cases") +
+  scale_y_continuous(expand = c(0,0),
+                     name = "individual predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.93,0.8),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank())
+ggsave(paste0(fig_path,"pdfs_scores_peak_outlier.pdf"), p1_peak_outlier, width = 6, height = 2.5, units = "in")
+```
+
+Next, we aggregate the predictions with and without trimming (note we only 
+consider trimming of two values, lowest and highest, because there are only five models). 
+
+```{r outlier-aggregate}
+# aggregate cdfs
+agg_cdfs_outlier <- rbind(
+  aggregate_cdfs(bind_rows(cdfs, outlier_cdfs), id_var = "model", 
+                 group_by = c("struc_uncert", "variable"),
+                 method = "LOP", 
+                 ret_quantiles = q) %>%
+    .[, ":=" (method="LOP", 
+              ntrim = 0)],
+  aggregate_cdfs(bind_rows(cdfs, outlier_cdfs), id_var = "model", 
+                 group_by = c("struc_uncert", "variable"),
+                 method = "vincent", 
+                 ret_quantiles = q) %>%
+    .[, ":=" (method="Vincent", 
+              ntrim = 0)], 
+  # add trimmed aggregates
+  aggregate_cdfs(bind_rows(cdfs, outlier_cdfs), id_var = "model", 
+                 group_by = c("struc_uncert", "variable"),
+                 method = "LOP", 
+                 ret_quantiles = q, 
+                 weighting_scheme = "CDF_exterior", 
+                 n_trim = 2) %>%
+    .[, ":=" (method="LOP", 
+              ntrim = 2)],
+  aggregate_cdfs(bind_rows(cdfs, outlier_cdfs), id_var = "model", 
+                 group_by = c("struc_uncert", "variable"),
+                 method = "vincent", 
+                 ret_quantiles = q, 
+                 weighting_scheme = "CDF_exterior", 
+                 n_trim = 2) %>%
+    .[, ":=" (method="Vincent", 
+              ntrim = 2)]
+  )
+  
+# to get aggregate pdfs, sample from std. uniform and draw from distributions
+agg_pdfs_outlier <- agg_cdfs_outlier[, .(samps = approx(quantile, value, runif(100000))$y), 
+                     by = .(struc_uncert, variable, method, ntrim)] %>%
+  .[!is.na(samps)] %>%
+  .[, .(x = density(samps, adjust = 1.5)$x, y = density(samps, adjust = 1.5)$y), 
+    by = .(struc_uncert, variable, method, ntrim)]
+```
+
+We plot the resulting aggregate distributions. 
+
+```{r outlier-plot-aggs, fig.width=8, fig.height = 2.25, echo = FALSE}
+# plot
+p2_cumu_outlier <- agg_pdfs_outlier %>% 
+  filter(variable == "cum_cases") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_simp))) %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_path(aes(color = method, linetype =  as.factor(ntrim)), alpha = 0.8) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  coord_cartesian(xlim = c(0,2000), 
+                  ylim = range(pdfs %>% 
+                                 filter(variable == "cum_cases") %>% 
+                                 select(y)))+
+  scale_color_manual(values = colrs_agg) +
+  scale_linetype_manual(values = c("solid", "62"), 
+                        labels = c("no trimming", "exterior trimming")) +
+  scale_x_continuous(label = comma, name = "cumulative cases") +
+  scale_y_continuous(expand = c(0,0), name = "aggregate predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.height = unit(0.25, "cm"),
+        legend.key.width = unit(0.55, "cm"),
+        legend.margin=margin(0.01,0.01,0.01,0.01),
+        legend.position = c(0.8,0.78),
+        legend.text = element_text(size = rel(0.7)),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank())
+p2_cumu_outlier
+
+p2_cumu_outlier <- plot_grid(p2_cumu + 
+                               labs(subtitle = "A: aggregate distributions without outlier") + 
+                               theme(legend.position = "none"), 
+                             p2_cumu_outlier + 
+                               labs(subtitle = "B: aggregate distributions with outlier"), 
+                             ncol = 1)
+ggsave(paste0(fig_path,"pdfs_agg_cum_outlier.pdf"), p2_cumu_outlier, width = 6, height = 5, units = "in")
+
+p2_peak <- agg_pdfs %>% 
+  filter(variable == "peak_cases") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_simp))) %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_path(aes(color = method), alpha = 0.8) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  coord_cartesian(ylim = range(bind_rows(pdfs, outlier_pdfs) %>% 
+                                 filter(variable == "peak_cases") %>% 
+                                 select(y)))+
+  scale_color_manual(values = colrs_agg) +
+  scale_linetype_manual(values = c("solid", "62"), 
+                        labels = c("no trimming", "exterior trimming")) +
+  scale_x_continuous(label = comma, name = "peak cases") +
+  scale_y_continuous(expand = c(0,0), name = "aggregate predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(legend.position = "none",
+        panel.grid = element_blank(),
+        strip.background = element_blank())
+
+p2_peak_outlier <- agg_pdfs_outlier %>% 
+  filter(variable == "peak_cases") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_simp))) %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_path(aes(color = method, linetype =  as.factor(ntrim)), alpha = 0.8) +
+  facet_grid(cols = vars(struc_uncert), 
+             labeller = labeller(struc_uncert = labs_struc_super_simp)) +
+  coord_cartesian(ylim = range(bind_rows(pdfs, outlier_pdfs) %>% 
+                                 filter(variable == "peak_cases") %>% 
+                                 select(y)))+
+  scale_color_manual(values = colrs_agg) +
+  scale_linetype_manual(values = c("solid", "62"), 
+                        labels = c("no trimming", "exterior trimming")) +
+  scale_x_continuous(label = comma, name = "peak cases") +
+  scale_y_continuous(expand = c(0,0), name = "aggregate predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(legend.key.height = unit(0.25, "cm"),
+        legend.key.width = unit(0.55, "cm"),
+        legend.margin=margin(0.01,0.01,0.01,0.01),
+        legend.position = "bottom",
+        legend.text = element_text(size = rel(0.7)),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank())
+p2_peak_outlier <- plot_grid(p2_peak + 
+                               labs(subtitle = "A: aggregate distributions without outlier") + 
+                               theme(legend.position = "none"), 
+                             p2_peak_outlier + 
+                               labs(subtitle = "B: aggregate distributions with outlier"), 
+                             ncol = 1, 
+                             rel_heights = c(0.45, 0.55))
+
+ggsave(paste0(fig_path,"pdfs_agg_peak_outlier.pdf"), p2_peak_outlier, width = 6, height = 5, units = "in")
+```
+
+
+Let's see how these aggregates perform against the alternate truth scenarios. 
+
+```{r outlier-crps}
+# implement CRPS
+scores_outlier <- obs %>%
+  select(variable, value) %>%
+  unique() %>%
+  rename(obs = value) %>%
+  mutate(obs_num = 1:length(obs)) %>%
+  dplyr::left_join(agg_cdfs_outlier)
+# get CRPS score
+scores_outlier <- setDT(scores_outlier)[, .(CRPS = CRPS(quantile,value,obs)), #
+                   by=.(method, ntrim, variable, struc_uncert, obs_num, obs)]
+```
+
+
+```{r outlier-plot-crps-diff, fig.width=8, fig.height = 3, echo = FALSE}
+crps_cum_outlier <- bind_rows(scores %>%
+                                mutate(ntrim = -2), 
+                              scores_outlier) %>%
+  filter(variable == "cum_cases") %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
+  ggplot(aes(x = obs, y = CRPS, color = method, linetype = as.factor(ntrim))) + 
+  geom_line(alpha = 0.7) + 
+  facet_grid(cols = vars(struc_uncert)) +
+  labs(x = "observed cumulative cases", color = "aggregate") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_linetype_discrete(labels = c("no outlier, no trimming", 
+                                     "outlier, no trimming", 
+                                     "outlier, exterior trimming")) +
+  scale_x_continuous(labels = comma) +
+  theme_bw() + 
+  theme(legend.margin=margin(0,0,0,0),
+        legend.position = "bottom", 
+        legend.text = element_text(size = rel(0.7)),
+        legend.title = element_blank(),
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+crps_cum_outlier
+ggsave(paste0(fig_path,"crps_diff_cum_outlier.pdf"), crps_cum_outlier, width = 8, height = 3, units = "in")
+
+crps_peak_outlier <- bind_rows(scores %>%
+                                mutate(ntrim = -2), 
+                              scores_outlier) %>%
+  filter(variable == "peak_cases") %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), levels = labs_struc_super_simp)) %>%
+  ggplot(aes(x = obs, y = CRPS, color = method, linetype = as.factor(ntrim))) + 
+  geom_line(alpha = 0.7) + 
+  facet_grid(cols = vars(struc_uncert)) +
+  labs(x = "observed peak cases", color = "aggregate") +
+  scale_color_manual(values = colrs_agg) + 
+  scale_linetype_discrete(labels = c("no outlier, no trimming", 
+                                     "outlier, no trimming", 
+                                     "outlier, exterior trimming")) +
+  scale_x_continuous(labels = comma) +
+  theme_bw() + 
+  theme(legend.margin=margin(0,0,0,0),
+        legend.position = "bottom", 
+        legend.text = element_text(size = rel(0.7)),
+        legend.title = element_blank(),
+        panel.grid = element_blank(), 
+        strip.background = element_blank())
+ggsave(paste0(fig_path,"crps_diff_peak_outlier3.pdf"), crps_peak_outlier, width = 8, height = 3, units = "in")
+```
+
+```{r outlier-CRPS-dists-cum, fig.width=8, fig.height = 5, echo = FALSE}
+crps_cum_outiler_full <- obs %>%
+  left_join(scores_outlier, by = c("variable", "value" = "obs")) %>%
+  filter(variable == "cum_cases") %>%
+  # summarize distribution of differences
+  group_by(variable, method, true_beta, true_rho, struc_uncert, ntrim) %>%
+  summarise(lower = quantile(CRPS, 0.025),
+      lower_25 = quantile(CRPS, 0.25), 
+      med = median(CRPS),
+      upper_75 = quantile(CRPS, 0.75),
+      upper = quantile(CRPS, 0.975)) %>%
+  # for plotting
+  mutate(plot_y1 = factor(true_beta)) %>%
+  mutate(plot_y1 = as.numeric(plot_y1) ,
+         plot_y2 = as.numeric(factor(method, levels = c("LOP", "Vincent")))/2.5 ,
+         plot_y3 = ntrim*0.1) %>%
+  mutate(plot_y = plot_y1 + plot_y2 + plot_y3-0.7) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], 
+                                      ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), 
+                               levels = labs_struc_super_simp)) %>%
+  ggplot(aes(y = plot_y, color = method)) + 
+  geom_segment(aes(x = lower_25, xend = upper_75, yend = plot_y), size = 1.5) +
+  geom_pointrange(aes(x = med, xmin = lower, xmax = upper)) +
+  geom_text(aes(x = med, label = ifelse(ntrim == 0, "U", "T")), color = "white", size = 1.5) +
+  facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
+             labeller = labeller(true_rho = labs_rho)) +
+  scale_color_manual(values = colrs_agg) +
+  scale_x_continuous(labels = comma, 
+                     name = "CRPS for cumulative cases") +
+  scale_y_reverse(breaks = labs_m,
+                  labels = names(labs_m),
+                  name = "Assumptions about future observations") +
+  theme_bw()+
+  theme(#axis.title.y = element_blank(),
+        legend.position = "none",
+        panel.grid = element_blank(),
+        strip.background = element_blank(),
+        strip.placement = "outside")
+crps_cum_outiler_full
+ggsave(paste0(fig_path,"crps_dist_cum_outlier.pdf"), crps_cum_outiler_full, width = 8, height = 7, units = "in")
+```
+
+```{r outlier-CRPS-dists-peak, echo = FALSE}
+crps_peak_outiler_full <- obs %>%
+  left_join(scores_outlier, by = c("variable", "value" = "obs")) %>%
+  filter(variable == "peak_cases") %>%
+  # summarize distribution of differences
+  group_by(variable, method, true_beta, true_rho, struc_uncert, ntrim) %>%
+  summarise(lower = quantile(CRPS, 0.025),
+      lower_25 = quantile(CRPS, 0.25), 
+      med = median(CRPS),
+      upper_75 = quantile(CRPS, 0.75),
+      upper = quantile(CRPS, 0.975)) %>%
+  # for plotting
+  mutate(plot_y1 = factor(true_beta)) %>%
+  mutate(plot_y1 = as.numeric(plot_y1) ,
+         plot_y2 = as.numeric(factor(method, levels = c("LOP", "Vincent")))/2.5 ,
+         plot_y3 = ntrim*0.1) %>%
+  mutate(plot_y = plot_y1 + plot_y2 + plot_y3-0.7) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], 
+                                      ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), 
+                               levels = labs_struc_super_simp)) %>%
+  ggplot(aes(y = plot_y, color = method)) + 
+  geom_segment(aes(x = lower_25, xend = upper_75, yend = plot_y), size = 1.5) +
+  geom_pointrange(aes(x = med, xmin = lower, xmax = upper)) +
+  geom_text(aes(x = med, label = ifelse(ntrim == 0, "U", "T")), color = "white", size = 1.5) +
+  facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
+             labeller = labeller(true_rho = labs_rho)) +
+  scale_color_manual(values = colrs_agg) +
+  scale_x_continuous(labels = comma, 
+                     name = "CRPS for peak cases") +
+  scale_y_reverse(breaks = labs_m,
+                  labels = names(labs_m),
+                  name = "Assumptions about future observations") +
+  theme_bw()+
+  theme(#axis.title.y = element_blank(),
+        legend.position = "none",
+        panel.grid = element_blank(),
+        strip.background = element_blank(),
+        strip.placement = "outside")
+ggsave(paste0(fig_path,"crps_dist_peak_outlier.pdf"), crps_peak_outiler_full, width = 8, height = 7, units = "in")
+```
+
+Lastly, we plot how often is each aggregate distribution the best performer.
+
+```{r outlier-best-CRPS, fig.width=8, fig.height = 5, echo = FALSE}
+crps_cum_best_outlier <- obs %>%
+  left_join(scores_outlier, by = c("variable", "value" = "obs")) %>%
+  filter(variable == "cum_cases") %>%
+  group_by(sim, true_beta, true_rho, variable, struc_uncert) %>%
+  mutate(r = rank(CRPS)) %>%
+  filter(r == 1) %>%
+  mutate(true_beta = factor(true_beta, levels = rev(c("m1", "m2", "m3", "m4","mean")))) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], 
+                                      ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), 
+                               levels = labs_struc_super_simp)) %>%
+  ggplot(aes(y = as.factor(true_beta), fill = method, alpha = as.factor(ntrim))) + 
+  geom_bar(position = "fill") + 
+  facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
+             labeller = labeller(true_rho = labs_rho)) +
+  scale_fill_manual(values = colrs_agg) + 
+  scale_alpha_manual(values = c(0.6,1), 
+                     labels = c("no trimming", "exterior trimming")) +
+  scale_x_continuous(expand = c(0,0),
+                     labels = percent,
+                     name = "observations with best CRPS for cumulative cases") +
+  scale_y_discrete(expand = c(0,0),
+                   labels = rev(names(labs_m)),
+                   name = "Assumptions about future observations") +
+  theme_bw() +
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid = element_blank(), 
+        strip.background = element_blank(), 
+        strip.placement = "outside")
+crps_cum_best_outlier
+ggsave(paste0(fig_path,"crps_best_cum_outlier.pdf"), width = 8, height = 7, units = "in")
+
+
+crps_peak_best_outlier <- obs %>%
+  left_join(scores_outlier, by = c("variable", "value" = "obs")) %>%
+  filter(variable == "peak_cases") %>%
+  group_by(sim, true_beta, true_rho, variable, struc_uncert) %>%
+  mutate(r = rank(CRPS)) %>%
+  filter(r == 1) %>%
+  mutate(true_beta = factor(true_beta, levels = rev(c("m1", "m2", "m3", "m4","mean")))) %>%
+  mutate(struc_uncert = factor(ifelse(struc_uncert == "none", labs_struc_super_simp[1], 
+                                      ifelse(struc_uncert == "btn", labs_struc_super_simp[2], labs_struc_super_simp[3])), 
+                               levels = labs_struc_super_simp)) %>%
+  ggplot(aes(y = as.factor(true_beta), fill = method, alpha = as.factor(ntrim))) + 
+  geom_bar(position = "fill") + 
+  facet_grid(cols = vars(struc_uncert), rows = vars(true_rho), switch = "y", 
+             labeller = labeller(true_rho = labs_rho)) +
+  scale_fill_manual(values = colrs_agg) + 
+  scale_alpha_manual(values = c(0.6,1), 
+                     labels = c("no trimming", "exterior trimming")) +
+  scale_x_continuous(expand = c(0,0),
+                     labels = percent,
+                     name = "observations with best CRPS for peak cases") +
+  scale_y_discrete(expand = c(0,0),
+                   labels = rev(names(labs_m)),
+                   name = "Assumptions about future observations") +
+  theme_bw() +
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        panel.grid = element_blank(), 
+        strip.background = element_blank(), 
+        strip.placement = "outside")
+ggsave(paste0(fig_path,"crps_best_peak_outlier.pdf"), crps_peak_best_outlier, 
+       width = 8, height = 7, units = "in")
+```
+
 ```{r Fig3, include = FALSE, fig.width=12, fig.height = 10}
 struc_text_plot <- ggplot(data = data.frame(x = c(0,1),
                            y = c(0,0))) + 
@@ -855,7 +1344,7 @@ F4a = pdfs %>%
   facet_grid(cols = vars(struc_uncert), 
              labeller = labeller(struc_uncert = labs_struc_super_simp)) +
   scale_color_manual(labels = c(ub_labs, "LOP", "Vincent"), 
-                     values = c(rev(colrs_mod), colrs_agg)) +
+                     values = c(rev(colrs_mod[1:4]), colrs_agg)) +
   scale_x_continuous(#expand = c(0.005,0),
                      label = comma, 
                      name = "peak cases") +
@@ -876,6 +1365,51 @@ plot_grid(struc_text_plot, F4a,
            ncol = 1, rel_heights = c(0.05,0.95), axis = "lr", align = "vh")
 
 ggsave(paste0(fig_path,"pdfs_scores_peak.pdf"), width = 6, height = 2.5, units = "in")
+```
+
+```{r Fig5, include = FALSE}
+trim_labs <- c("no trimming (equally weighted)", "exterior trimming") 
+names(trim_labs) <- c(0,2) 
+
+pdfs_peak_outlier <- bind_rows(pdfs, outlier_pdfs) %>% 
+  filter(variable == "peak_cases", struc_uncert == "btn") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))) %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_path(size= 0.5, color = "grey75") +
+  geom_path(data = agg_pdfs %>%
+              filter(variable == "peak_cases", struc_uncert == "btn") %>%
+              mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))),
+            aes(color =  method), size = 1, alpha = 0.4) +
+  geom_path(data = agg_pdfs_outlier %>%
+              filter(variable == "peak_cases", struc_uncert == "btn") %>%
+              mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))),
+            aes(color =  method), size = 1) +
+  geom_text(data = data.frame(x = rep(-Inf,2),
+                              y = rep(Inf, 2),
+                              lab = c("(a)", "(b)"),
+                              ntrim = c(0,2)),
+            aes(x = x, y = y, label = lab), hjust = 0, vjust = 1, size = bs/3) +
+  facet_grid(cols = vars(ntrim), 
+             labeller = labeller(ntrim = trim_labs)) +
+  scale_color_manual(labels = c("LOP", "Vincent"), 
+                     values = colrs_agg) +
+  scale_x_continuous(#expand = c(0.005,0),
+                     label = comma, 
+                     name = "peak cases") +
+  scale_y_continuous(expand = c(0,0,0.05, 0), 
+                     name = "individual and aggregate predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.95,0.75),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank()) 
+ggsave(paste0(fig_path,"pdfs_scores_peak_outlier.pdf"), pdfs_peak_outlier, 
+       width = 4.5, height = 2.5, units = "in")
 ```
 
 ```{r supp-cum, include = FALSE}
@@ -1110,7 +1644,39 @@ obs %>%
   filter(variable == "peak_cases", true_beta == "mean") %>%
   summarise(pct_LOP = sum(LOP_better_flag)/n(), 
             pct_Vin = 1-pct_LOP)
+```
 
+```{r outlier-values-for-text, include = FALSE}
+# how often is each one best across all truth scenarios
+obs %>%
+  left_join(scores_outlier, by = c("variable", "value" = "obs")) %>%
+  filter(variable == "cum_cases") %>%
+  group_by(sim, true_beta, true_rho, variable, struc_uncert) %>%
+  mutate(r = rank(CRPS)) %>%
+  filter(r == 1) %>%
+  group_by(method, ntrim) %>%
+  summarize(n = n(), 
+            p = n()/30000)
+
+# how often is each one best across all truth scenarios
+obs %>%
+  left_join(scores_outlier, by = c("variable", "value" = "obs")) %>%
+  filter(variable == "peak_cases") %>%
+  group_by(sim, true_beta, true_rho, variable, struc_uncert) %>%
+  mutate(r = rank(CRPS)) %>%
+  filter(r == 1) %>%
+  group_by(method, ntrim) %>%
+  summarize(n = n(), 
+            p = n()/30000)
+  
+# how often is trimming preferred?
+  obs %>%
+  left_join(scores_outlier, by = c("variable", "value" = "obs")) %>%
+  mutate(ntrim = paste0("n", ntrim)) %>%
+  reshape2::dcast(sim + beta + gamma + rho + true_beta + true_rho + variable + struc_uncert + method ~ ntrim, value.var = "CRPS") %>%
+  mutate(trim_better = ifelse(n2 <= n0, 1 , 0)) %>%
+  group_by(method, variable) %>%
+  summarise(n = sum(trim_better)/n())
 ```
 
 ## References
