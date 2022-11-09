@@ -1344,7 +1344,7 @@ F4a = pdfs %>%
   facet_grid(cols = vars(struc_uncert), 
              labeller = labeller(struc_uncert = labs_struc_super_simp)) +
   scale_color_manual(labels = c(ub_labs, "LOP", "Vincent"), 
-                     values = c(rev(colrs_mod), colrs_agg)) +
+                     values = c(rev(colrs_mod[1:4]), colrs_agg)) +
   scale_x_continuous(#expand = c(0.005,0),
                      label = comma, 
                      name = "peak cases") +
@@ -1365,6 +1365,51 @@ plot_grid(struc_text_plot, F4a,
            ncol = 1, rel_heights = c(0.05,0.95), axis = "lr", align = "vh")
 
 ggsave(paste0(fig_path,"pdfs_scores_peak.pdf"), width = 6, height = 2.5, units = "in")
+```
+
+```{r Fig5, include = FALSE}
+trim_labs <- c("no trimming (equally weighted)", "exterior trimming") 
+names(trim_labs) <- c(0,2) 
+
+pdfs_peak_outlier <- bind_rows(pdfs, outlier_pdfs) %>% 
+  filter(variable == "peak_cases", struc_uncert == "btn") %>%
+  mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))) %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_path(size= 0.5, color = "grey75") +
+  geom_path(data = agg_pdfs %>%
+              filter(variable == "peak_cases", struc_uncert == "btn") %>%
+              mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))),
+            aes(color =  method), size = 1, alpha = 0.4) +
+  geom_path(data = agg_pdfs_outlier %>%
+              filter(variable == "peak_cases", struc_uncert == "btn") %>%
+              mutate(struc_uncert = factor(struc_uncert, levels = names(labs_struc_super_simp))),
+            aes(color =  method), size = 1) +
+  geom_text(data = data.frame(x = rep(-Inf,2),
+                              y = rep(Inf, 2),
+                              lab = c("(a)", "(b)"),
+                              ntrim = c(0,2)),
+            aes(x = x, y = y, label = lab), hjust = 0, vjust = 1, size = bs/3) +
+  facet_grid(cols = vars(ntrim), 
+             labeller = labeller(ntrim = trim_labs)) +
+  scale_color_manual(labels = c("LOP", "Vincent"), 
+                     values = colrs_agg) +
+  scale_x_continuous(#expand = c(0.005,0),
+                     label = comma, 
+                     name = "peak cases") +
+  scale_y_continuous(expand = c(0,0,0.05, 0), 
+                     name = "individual and aggregate predictions\n(probability density function)") +
+  theme_bw(base_size = bs) +
+  theme(axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.margin=margin(0,0,0,0),
+        legend.text = element_text(size = rel(0.7)),
+        legend.position = c(0.95,0.75),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        strip.background = element_blank()) 
+ggsave(paste0(fig_path,"pdfs_scores_peak_outlier.pdf"), pdfs_peak_outlier, 
+       width = 4.5, height = 2.5, units = "in")
 ```
 
 ```{r supp-cum, include = FALSE}
