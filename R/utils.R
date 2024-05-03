@@ -51,7 +51,7 @@ return_specified_quantiles <- function(data, ret_quantiles, ret_values){
     }
     else{
       # add points on either side of the cdf to help with interpolation
-      data <- bind_rows(data, data.frame(quantile = c(0,1),
+      data <- dplyr::bind_rows(data, data.frame(quantile = c(0,1),
                                          value = c(min(data$value), max(data$value))))
       data_interp <- approx(data$value, data$quantile, xout = ret_values, ties = "mean", rule = 2)
       data_return <- tibble::tibble(quantile = data_interp$y,
